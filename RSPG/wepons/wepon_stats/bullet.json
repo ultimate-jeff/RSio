@@ -1,0 +1,9 @@
+{
+  "speed": 20,
+  "damage": 5,
+  "sizex": 5,
+  "sizey": 5,
+  "life_time": 100,
+  "fire_sound": "shot",
+  "hit_sound": "707db471-c834-494e-a3d9-ada985203ef6"
+}
