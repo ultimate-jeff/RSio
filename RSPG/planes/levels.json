@@ -4,6 +4,6 @@
   "levels": [ "level0", "level1", "level2" ],
   "level0": ["pNone","test"],
   "level1": [ "pt-17", "bristol_f2", "albatros_dv", "fokker_dr1", "sopwith_camel", "vought_sbu_corsair" ],
-  "level2": [ "f4f_wildcat", "bear_cat", "p-51", "me_262" ]
+  "level2": [ "f4f_wildcat", "bear_cat", "p-51", "me_262","A4_skyraider" ]
 
 }
