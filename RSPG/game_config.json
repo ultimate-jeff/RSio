@@ -58,6 +58,7 @@
     "sounds/shot.mp3",
     "sounds/still_alive.mp3",
     "sounds/to_be_continued.mp3",
+    "sounds/game_song1.mp3",
     "tarane/map1.png",
     "tarane/map2.png",
     "tarane/structures/HP.png",
@@ -71,4 +72,5 @@
   ],
   "curent_files": []
 }
+
 
