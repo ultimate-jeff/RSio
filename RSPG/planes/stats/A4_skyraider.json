@@ -1,0 +1,15 @@
+{
+  "acceleration": 0.5,
+  "armor": 1.1003,
+  "fire_speed": 2,
+  "health": 80,
+  "reload_speed": 0.5,
+  "sizex": 90,
+  "sizey": 100,
+  "top_speed": 16,
+  "turn_speed": 5,
+  "wepons": [ "fast_bullet" ],
+  "wepon_amounts": [ 12 ],
+  "xp_value": 20,
+  "leval": 2
+}
