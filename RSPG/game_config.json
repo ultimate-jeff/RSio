@@ -1,7 +1,6 @@
 {
   "curent_files": [],
   "files": [
-    "RSPG",
     "RSPG/None.png",
     "RSPG/RSPG.exe",
     "RSPG/data/ai_names.json",
@@ -84,3 +83,4 @@
     "RSPG/wepons/wepon_stats/misall1.json"
   ]
 }
+
