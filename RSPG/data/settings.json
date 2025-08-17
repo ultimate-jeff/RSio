@@ -1,0 +1,10 @@
+{
+    "test": 0,
+    "dev_ops": 1,
+    "death_songs": [
+        "death_song.mp3",
+        "death_song2.mp3"
+    ],
+    "xpp": 18,
+    "max_ais": 10
+}
