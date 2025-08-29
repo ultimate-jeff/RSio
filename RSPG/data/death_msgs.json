@@ -1,0 +1,5 @@
+{
+  "out_of_bounds": [ "you went out of the world","you went to the wrong spot" ],
+  "shot_down": [ "you were shot down by {player}", "why did you let {player} kill you" ],
+  "idk": ["you have died idk why","you have died"]
+}

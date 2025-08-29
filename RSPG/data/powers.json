@@ -1,0 +1,8 @@
+{
+  "powers": [ "speed", "strength", "agility", "2_xp", "healing" ],
+  "speed": [ "atribute", "max_speed", 0.3 ],
+  "strength": [ "atribute", "health", 0.5 ],
+  "agility": [ "atribute", "turn_speed", 2 ],
+  "2_xp": [ "atribute", "xp", 2 ],
+  "healing": [ "atribute", "xp_value", 0.4 ]
+}
