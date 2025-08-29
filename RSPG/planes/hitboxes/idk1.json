@@ -1,9 +1,0 @@
-{
-  "acceleration": 0.7,
-  "armor": 0.1,
-  "fire_speed": 0.3,
-  "health": 80,
-  "reload_speed": 1.5,
-  "size": 100,
-  "top_speed": 180
-}
