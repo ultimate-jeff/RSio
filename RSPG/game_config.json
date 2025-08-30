@@ -79,9 +79,8 @@
     "wepons/wepon_stats/fast_bullet.json",
     "wepons/wepon_stats/flack_bullet.json",
     "wepons/wepon_stats/heck_bullet.json",
-    "wepons/wepon_stats/misall1.json",
-
+    "wepons/wepon_stats/misall1.json"
   ],
-  "curent_files": [
-  ]
+  "curent_files": []
 }
+
