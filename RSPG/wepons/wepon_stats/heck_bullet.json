@@ -1,0 +1,13 @@
+{
+  "speed": 24,
+  "damage": 5,
+  "sizex": 5,
+  "sizey": 10,
+  "life_time": 10,
+  "BT": "heck_bullet",
+  "extra_BT": "heck_bullet",
+  "extra_BC": 5,
+  "extra_BLT": 5,
+  "fire_sound": "086409_retro-gun-shot-81545",
+  "hit_sound": "707db471-c834-494e-a3d9-ada985203ef6"
+}
