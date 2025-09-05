@@ -1,7 +1,6 @@
 
 #from cam import Chunk, get_chunk, GameCamera
 import math
-import sys
 import pygame
 import random
 import time
@@ -502,6 +501,7 @@ class Wepons():
         self.WT = WT
         self.x = x
         self.y = y
+        self.angle = direction
         with open(f"wepons/wepon_stats/{WT}.json") as file:
             data = json.load(file)
         self.data = data
@@ -521,14 +521,59 @@ class Wepons():
         self.y += delta_y
         self.dx = delta_x
         self.dy = delta_y
-        self.original_image = pygame.image.load(f"wepons/{WT}.png")
-        self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
-        self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
+        self.Roriginal_image = pygame.image.load(f"wepons/{WT}.png")
+        self.image = pygame.transform.scale(self.Roriginal_image,(self.sizex,self.sizey))
+        self.original_image = pygame.transform.scale(self.Roriginal_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.rotate(self.original_image, direction)
         self.rect = self.image.get_rect(center=(500, 350))
         self.owner = user_name
         self.screen_rect = self.rect
         self.dist = 0
+
+        self.scaled_width = int(self.original_image.get_width() * camra.zoom)
+        self.scaled_height = int(self.original_image.get_height() * camra.zoom)
+
+        self.has_ai = False
+        self.turn_speed = 0
+        self.target = None
+        self.rect.center = (self.x, self.y)
+        if WT in settings_data['wepons_with_ai']:
+            self.turn_speed = data['turn_speed']
+            self.has_ai = True
+            self.target = self.find_closest_target(simulation_dist)
+
+            
+    def change_direction(self,new_angle):
+        self.angle = new_angle
+        rad = math.radians(new_angle)
+        self.dx = -self.speed * math.sin(rad)
+        self.dy = -self.speed * math.cos(rad)
+        self.original_image = pygame.transform.scale(self.Roriginal_image,(self.sizex,self.sizey))
+        self.original_image = pygame.transform.rotate(self.original_image, new_angle)
+
+    def ai_turn(self,LeftRite):
+        new_angle = self.angle
+        if LeftRite == 1:
+            new_angle = (self.angle - self.turn_speed) % 360
+        elif LeftRite == 2:
+            new_angle = (self.angle + self.turn_speed) % 360
+        elif LeftRite == 0:
+            pass
+        self.change_direction(new_angle)
+
+    def find_closest_target(self,distance=1000):
+        #global all_planes
+        closest = None
+        closest_dist = float('inf')
+        for obj in all_planes:
+            if obj.PT != "pNone" and obj.user_name != self.owner:
+                dx = obj.x - self.x
+                dy = obj.y - self.y
+                dist = math.hypot(dx, dy)
+                if dist < closest_dist and dist <= distance:
+                    closest = obj
+                    closest_dist = dist
+        return closest
 
     def update_player_dist(self):
         global player1
@@ -536,13 +581,34 @@ class Wepons():
         dy = self.y - player1.y
         self.dist = math.hypot(dx, dy)
 
+    def find_target_angle(self):
+        tar_x = self.target.x
+        tar_y = self.target.y
+        dx = tar_x - self.x
+        dy = tar_y - self.y
+        angle_to_target = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
+        return angle_to_target
+
+    def ai_event(self):
+        tar_ang = self.find_target_angle()
+        LeftRite = 0
+        ang_dif = (tar_ang - self.angle % 360)
+        if ang_dif > 0:
+            LeftRite = 2
+        elif ang_dif < 0:
+            LeftRite = 1
+        self.ai_turn(tar_ang)
+
+
+
+
     def update(self, display_surface, camera_obj):
         self.x += self.dx
         self.y += self.dy
         self.life_time -= 1
-        self.rect.center = (self.x, self.y)
-        scaled_width = int(self.original_image.get_width() * camera_obj.zoom)
-        scaled_height = int(self.original_image.get_height() * camera_obj.zoom)
+        #self.rect.center = (self.x, self.y)
+        #scaled_width = int(self.original_image.get_width() * camera_obj.zoom)
+        #scaled_height = int(self.original_image.get_height() * camera_obj.zoom)
         if self.life_time >= 0: 
             if loops % 2 == 0:
                 self.update_player_dist()
@@ -563,7 +629,6 @@ class Wepons():
             bullet.life_time = self.data['extra_BLT']
             all_bullets.append(bullet)
           
-
     def fire(self):
         global vol
         dx = self.x - player1.x
@@ -592,6 +657,7 @@ class Wepons():
         sound = pygame.mixer.Sound((f"sounds/{self.hit_sound}.mp3"))
         sound.set_volume(final_volume)
         sound.play()
+
 
 class Plane():
 
@@ -1408,13 +1474,13 @@ camra_zoom = 1
 respawn_lev = None
 R_menue_G = None
 vol = 0
-UI = 0
+UI = 1
 simulation_dist = 2000
 
 menue_songs = ["sounds/to_be_continued.mp3","sounds/still_alive.mp3"]
 pygame.mixer.init()
 main_channel = pygame.mixer.Channel(0)
-pygame.mixer.set_num_channels(16)
+pygame.mixer.set_num_channels(32)
 
 mx, my = pygame.mouse.get_pos()
 mouse_pos = (((mx - W_pos[0]) / scale),((my - W_pos[1]) / scale))
@@ -1425,7 +1491,7 @@ pygame.mixer.music.load(random.choice(menue_songs))
 pygame.mixer.music.set_volume(vol + 1)
 pygame.mixer_music.play(-1)
 main_menue()
-mouse_pos = pygame.mouse.get_pos()
+
 
 while runing:
     mx, my = pygame.mouse.get_pos()
