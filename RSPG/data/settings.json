@@ -1,11 +1,16 @@
 {
-    "test": 0,
-    "dev_ops": 1,
-    "death_songs": [
-        "death_song.mp3",
-        "death_song2.mp3"
-    ],
-    "xpp": 18,
-    "max_ais": 8,
-    "game_version": 1.0
+  "test": 0,
+  "dev_ops": 1,
+  "ticks_ai_can_be_unloaded": 15,
+  "death_songs": [
+    "death_song.mp3",
+    "death_song2.mp3"
+  ],
+  "xpp": 10,
+  "death_xp_amount": 8,
+  "max_ais": 8,
+  "game_version": 1.0,
+  "wepons_with_ai": [
+    "misall1"
+  ]
 }

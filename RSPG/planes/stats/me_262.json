@@ -1,7 +1,7 @@
 {
   "acceleration": 0.5,
   "armor": 1.205,
-  "fire_speed": 2,
+  "fire_speed": 3,
   "health": 80,
   "reload_speed": 0.5,
   "sizex": 90,

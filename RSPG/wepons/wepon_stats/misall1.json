@@ -1,13 +1,15 @@
 {
-  "speed": 24,
-  "damage": 5,
+  "speed": 25,
+  "damage": 50,
   "sizex": 5,
   "sizey": 10,
-  "life_time": 10,
+  "life_time": 100,
   "BT": "misal1",
-  "extra_BT": "heck_bullet",
+  "extra_BT": "bullet",
   "extra_BC": 0,
   "extra_BLT": 0,
   "fire_sound": "086409_retro-gun-shot-81545",
-  "hit_sound": "707db471-c834-494e-a3d9-ada985203ef6"
+  "hit_sound": "707db471-c834-494e-a3d9-ada985203ef6",
+  "turn_speed": 5
+
 }

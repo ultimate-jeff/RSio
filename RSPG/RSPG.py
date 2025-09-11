@@ -5,6 +5,7 @@ import pygame
 import random
 import time
 import json
+import numpy as np
 
 
 
@@ -16,6 +17,9 @@ with open("data/settings.json","r") as file:
     settings_data = json.load(file)
 with open("data/death_msgs.json","r") as file:
     death_msgs = json.load(file)
+with open("data/game_data.json","r") as file:
+    game_data = json.load(file)
+
 
 
 pygame.init()
@@ -90,6 +94,17 @@ def temp_to_color(temp):
         return (110, 110, 110)
     else:           # Snow / ice cap
         return (230, 230, 230)
+
+def color_swap(surface: pygame.Surface, old_color: tuple, new_color: tuple) -> pygame.Surface:
+    arr_rgb = pygame.surfarray.array3d(surface)
+    arr_alpha = pygame.surfarray.array_alpha(surface)
+    mask = np.all(arr_rgb == old_color, axis=-1)
+    arr_rgb[mask] = new_color
+    new_surface = pygame.Surface(surface.get_size(), pygame.SRCALPHA, 32)
+    new_surface = new_surface.convert_alpha()
+    pygame.surfarray.blit_array(new_surface, arr_rgb)
+    pygame.surfarray.pixels_alpha(new_surface)[:] = arr_alpha
+    return new_surface
 
 
 class Chunk:
@@ -202,6 +217,13 @@ def play_sound(file_path, volume=0.5):
     pygame.mixer_music.set_volume(vol + 0.5)
     pygame.mixer_music.play(-1)
 
+# init game_data
+menue_buttone_data = game_data['buttons']
+for button in menue_buttone_data:
+    bimg = pygame.image.load(button['image_path'])
+    bimg = pygame.transform.scale(bimg, (button['sizex'], button['sizey']))
+    button['image'] = bimg
+    
 
 class Parical():
     def __init__(self,WT,x,y,direction,user_name=None):
@@ -230,6 +252,11 @@ class Parical():
         self.owner = user_name
         self.screen_rect = self.rect
         self.update(display,camra)
+        self.scaled_width = int(self.original_image.get_width() * camra.zoom)
+        self.scaled_height = int(self.original_image.get_height() * camra.zoom)
+
+        #self.screen_x = ((self.x ) + camra.offset_x)
+        #self.screen_y = ((self.y ) + camra.offset_y)
 
         self.player_dist = 0
 
@@ -245,26 +272,18 @@ class Parical():
         self.y += self.dy
         self.life_time -= 1
         self.rect.center = (self.x, self.y)
-        scaled_width = int(self.original_image.get_width() * camera_obj.zoom)
-        scaled_height = int(self.original_image.get_height() * camera_obj.zoom)
-        current_scaled_image = self.image 
-        if scaled_width > 0 and scaled_height > 0:
-            current_scaled_image = pygame.transform.scale(self.original_image, (scaled_width, scaled_height))
-        else:
-            current_scaled_image = pygame.Surface((1,1))
-        if self.life_time >= 0:
-            if loops % 4 == 0:
-                self.update_player_dist()
-            screen_x = (self.x * camera_obj.zoom) + camera_obj.offset_x
-            screen_y = (self.y * camera_obj.zoom) + camera_obj.offset_y
-            screen_rect = current_scaled_image.get_rect(center=(screen_x, screen_y))
-            display_surface.blit(current_scaled_image, screen_rect)
-            self.screen_rect = screen_rect
-            self.current_scaled_image = current_scaled_image
-            return screen_rect
+        self.current_scaled_image = self.image 
+        self.screen_x = ((self.x )+ camra.offset_x)
+        self.screen_y = ((self.y )+ camra.offset_y)
+        if loops % 4 == 0:
+            self.update_player_dist()
+        screen_rect = self.current_scaled_image.get_rect(center=(self.screen_x, self.screen_y))
+        display_surface.blit(self.current_scaled_image, screen_rect)
+        self.screen_rect = screen_rect
+        return screen_rect
 
     def blit(self,display_surface):
-        display_surface.blit(self.current_scaled_image, self.screen_rect)
+        display_surface.blit(self.current_scaled_image,self.screen_rect)
 
 class AI():
     def __init__(self,all_planes,all_bullets,all_xp):
@@ -529,7 +548,6 @@ class Wepons():
         self.owner = user_name
         self.screen_rect = self.rect
         self.dist = 0
-
         self.scaled_width = int(self.original_image.get_width() * camra.zoom)
         self.scaled_height = int(self.original_image.get_height() * camra.zoom)
 
@@ -575,11 +593,6 @@ class Wepons():
                     closest_dist = dist
         return closest
 
-    def update_player_dist(self):
-        global player1
-        dx = self.x - player1.x
-        dy = self.y - player1.y
-        self.dist = math.hypot(dx, dy)
 
     def find_target_angle(self):
         tar_x = self.target.x
@@ -600,26 +613,25 @@ class Wepons():
         self.ai_turn(tar_ang)
 
 
-
+    def update_player_dist(self):
+        global player1
+        dx = self.x - player1.x
+        dy = self.y - player1.y
+        self.dist = math.hypot(dx, dy)
 
     def update(self, display_surface, camera_obj):
         self.x += self.dx
         self.y += self.dy
         self.life_time -= 1
-        #self.rect.center = (self.x, self.y)
-        #scaled_width = int(self.original_image.get_width() * camera_obj.zoom)
-        #scaled_height = int(self.original_image.get_height() * camera_obj.zoom)
         if self.life_time >= 0: 
-            if loops % 2 == 0:
+            if loops % 5 == 1:
                 self.update_player_dist()
             screen_x = (self.x * camera_obj.zoom) + camera_obj.offset_x
             screen_y = (self.y * camera_obj.zoom) + camera_obj.offset_y
             screen_rect = self.original_image.get_rect(center=(screen_x, screen_y))
             display_surface.blit(self.original_image, screen_rect)
             return screen_rect
-        elif self.life_time <= 0 and self.life_time >= -1.5 and self.data["extra_BC"] >= 1:
-            self.scater()
-    
+
     def scater(self):
         global all_bullets,display,camra
         BT = self.data["extra_BT"]
@@ -630,13 +642,15 @@ class Wepons():
             all_bullets.append(bullet)
           
     def fire(self):
-        global vol
+        #global vol
+        """
         dx = self.x - player1.x
         dy = self.y - player1.y
-        dist = math.hypot(dx, dy)
+        self.dist = math.hypot(dx, dy)
+        """
         max_vol = vol + 1
         max_dist = 2000
-        clamped_dist = min(dist, max_dist)
+        clamped_dist = min(self.dist, max_dist)
         volume_factor = 1.0 - (clamped_dist / max_dist)
         calculated_volume = max_vol * volume_factor
         final_volume = max(0.0, min(max_vol, calculated_volume))
@@ -645,19 +659,20 @@ class Wepons():
         sound.play()
 
     def hit(self):
+        
         dx = self.x - player1.x
         dy = self.y - player1.y
-        dist = math.hypot(dx, dy)
+        self.dist = math.hypot(dx, dy)
+        
         max_vol = vol + 0.3
         max_dist = 1000
-        clamped_dist = min(dist, max_dist)
+        clamped_dist = min(self.dist, max_dist)
         volume_factor = 1.0 - (clamped_dist / max_dist)
         calculated_volume = max_vol * volume_factor
         final_volume = max(0.0, min(max_vol, calculated_volume))
         sound = pygame.mixer.Sound((f"sounds/{self.hit_sound}.mp3"))
         sound.set_volume(final_volume)
         sound.play()
-
 
 class Plane():
 
@@ -699,7 +714,7 @@ class Plane():
         self.Rect = self.image.get_rect(center=(center_x, center_y))
         self.num = 0
         self.xp = 0
-        self.fired = []
+        self.fired = 0
         self.death_cause = ["None",""]
 
     def respawn(self,PT,op_data=None):
@@ -758,7 +773,7 @@ class Plane():
 
     def drop_xp(self):
         global all_xp
-        for i in range(int(self.xp_value/5)):
+        for i in range(int((self.xp_value/settings_data['death_xp_amount']) + (self.xp/settings_data['death_xp_amount'])/8 )):
             XP = Parical("death_xp",self.x+random.randint(0,self.sizex),self.y+random.randint(0,self.sizey),0,self.user_name)
             XP.update(display,camra)
             all_xp.append(XP)
@@ -783,10 +798,12 @@ class Plane():
 
     def fire(self):
         global all_bullets,display,camra
-        if len(self.fired) <= self.C_amo:
+        if (self.fired) <= self.C_amo:
             B1 = Wepons(self.wepon,self.x,self.y,self.angle,self.user_name)
             B1.fire()
             all_bullets.append(B1)
+            self.fired += 1
+            print(f"fired {self.fired} bullets {self.fired} \n")
 
     def update_bullets(self,all_bullets,owners_bullets=False):
         for bullet in all_bullets:
@@ -794,9 +811,17 @@ class Plane():
                     if bullet.rect.colliderect((self.x,self.y,self.sizex,self.sizey)):
                         self.health -= bullet.damage / self.armor
                         bullet.hit()
-                        bullet.life_time = 4
+                        bullet.life_time = 0
                         if self.health <= 0:
                             self.death_cause = ["shot_down",bullet.owner]
+                elif bullet.owner == self.user_name:
+                    if bullet.life_time <= 0:
+                        if bullet.data["extra_BC"] >= 1:
+                            bullet.scater()
+                            self.fired += 1
+                        self.fired -= 1
+                        all_bullets.remove(bullet)
+                        del bullet
             
 
     def collect_xp(self):
@@ -1101,7 +1126,6 @@ def event():
                         sound.play()
                         break
 
-
 def Game():
     global runing,g,text,Menue,camra_zoom,all_xp,R_menue_G,player1,button_rects,respawn_lev,vol,settings_data,all_planes,all_ais,levels,vol,mouse_pos,UI,heal_amount,loops
     heal_amount = random.randint(0,20)
@@ -1115,7 +1139,7 @@ def Game():
     player1.collect_xp()
     if loops % 8:
         respawn_check(player1,False)
-        xp_cluster = get_xp_clusters()
+        #xp_cluster = get_xp_clusters()
         all_planes = get_ranked_planes()
         print(f"xp clusters are at {len(xp_cluster)}")
     if respawn_lev != None and R_menue_G != None:
@@ -1133,6 +1157,7 @@ def Game():
 
     disp_text(f"XP -> {int(player1.xp)}",text_font,(0,0,0),100,50)
     disp_text(f"x: {int(player1.x)} y: {int(player1.y)}",text_font,(0,0,0),100,70)
+    wepons_menue()
 
 def main_menue():
     global runing,g,text,typing,user_name,Menue,player1,all_planes,R_menue_G,player1,button_rects,respawn_lev,vol,mouse_pos
@@ -1143,18 +1168,27 @@ def main_menue():
     pygame.draw.rect(display,(100,100,100,100),(center_x-200,center_y-50,400,50),border_radius=20)
     pygame.draw.rect(display,(50,50,50,0),(center_x-200,center_y-50,400,50),width= 4,border_radius=15)
     disp_text(DT,pygame.font.SysFont("Arial", 25),(80,80,80),center_x,center_y-25)
+    img = pygame.image.load("pt-17.png")
+    img = pygame.transform.scale(img,(40,40))
+    img = pygame.transform.rotate(img, -45)
+    display.blit(img,(center_x-220,center_y-80))
     # play button
-    play_rect = pygame.draw.rect(display,(50,150,50),(center_x-100,center_y+10,200,60),border_radius=20)
-    disp_text("play",text_font_big,(0,0,0),center_x,center_y+35)
+    play_rect = pygame.rect.Rect(center_x-100,center_y+10,200,60)
+    display.blit(menue_buttone_data[0]["image"],(menue_buttone_data[0]['x'],menue_buttone_data[0]['y']))
     # setings button
+
     settintg_rect = pygame.draw.rect(display,(100,150,100),(display.get_width()-200,display.get_height()-50,150,30),border_radius=3)
+    pygame.draw.rect(display,(50,100,50),(display.get_width()-200,display.get_height()-50,150,30),width= 2,border_radius=3)
     disp_text("settings ",text_font,(7,0,0),display.get_width()-150,display.get_height()-36)
     # qit button
-    quit_rect = pygame.draw.rect(display,(150,50,50),(10,display.get_height()-50,150,30),border_radius=3)
+    quit_rect = pygame.draw.rect(display,(150,50,50),(10,display.get_height()-50,150,30),border_radius=6)
+    pygame.draw.rect(display,(100,0,0),(10,display.get_height()-50,150,30),width= 2,border_radius=6)
     disp_text("quit",text_font,(7,0,0),75,display.get_height()-36)
-
+    # how to play button
     how_to_play_rect = pygame.draw.rect(display,(100,100,100),(display.get_width()-200,display.get_height()-100,150,30),border_radius=3)
-    disp_text("how to play",text_font,(7,0,0),display.get_width()-148,display.get_height()-86)
+    display.blit(menue_buttone_data[1]["image"],(menue_buttone_data[1]['x'],menue_buttone_data[1]['y']))
+    #pygame.draw.rect(display,(50,50,50),(display.get_width()-200,display.get_height()-100,150,30),width= 2,border_radius=3)
+    #disp_text("how to play",text_font,(7,0,0),display.get_width()-148,display.get_height()-86)
     
     disp_text("your plane will be randomly selected from level 1",text_font,(100,0,0),center_x,10)
 
@@ -1228,18 +1262,23 @@ def settings_menue():
         data = json.load(file)
 
     back_rect = pygame.draw.rect(display,(150,100,100),(display.get_width()-200,display.get_height()-50,150,30),border_radius=3)
+    pygame.draw.rect(display,(50,50,50),(display.get_width()-200,display.get_height()-50,150,30),width= 2,border_radius=3)
     disp_text("back",text_font,(7,0,0),display.get_width()-150,display.get_height()-36)
 
     dev_ops_rect = pygame.draw.rect(display,(100,100,100),(display.get_width()-200,display.get_height()-100,150,30),border_radius=3)
+    pygame.draw.rect(display,(50,50,50),(display.get_width()-200,display.get_height()-100,150,30),width= 2,border_radius=3)
     disp_text(f"dev ops {data["dev_ops"]}",text_font,(7,0,0),display.get_width()-150,display.get_height()-86)
 
     ai_count_rect = pygame.draw.rect(display,(100,150,100),(display.get_width()-200,display.get_height()-150,150,30),border_radius=3)
+    pygame.draw.rect(display,(50,100,50),(display.get_width()-200,display.get_height()-150,150,30),width= 2,border_radius=3)
     disp_text(f"max ai {data['max_ais']}",text_font,(7,0,0),display.get_width()-150,display.get_height()-136)
 
     more_ai_rect = pygame.draw.rect(display,(100,100,100),(display.get_width()-200,display.get_height()-200,150,30),border_radius=3)
+    pygame.draw.rect(display,(50,50,50),(display.get_width()-200,display.get_height()-200,150,30),width= 2,border_radius=3)
     disp_text("more ai",text_font,(7,0,0),display.get_width()-150,display.get_height()-186)
 
     less_ai_rect = pygame.draw.rect(display,(100,100,100),(display.get_width()-200,display.get_height()-250,150,30),border_radius=3)
+    pygame.draw.rect(display,(50,50,50),(display.get_width()-200,display.get_height()-250,150,30),width= 2,border_radius=3)
     disp_text("less ai",text_font,(7,0,0),display.get_width()-150,display.get_height()-236)
 
     
@@ -1287,6 +1326,7 @@ def how_to_play_menue():
     global runing,g,text,typing,user_name,Menue,settings_data,typing,text,mouse_pos
     display.fill([49, 104, 158])
     back_rect = pygame.draw.rect(display,(150,100,100),(display.get_width()-200,display.get_height()-50,150,30),border_radius=3)
+    pygame.draw.rect(display,(50,50,50),(display.get_width()-200,display.get_height()-50,150,30),width= 2,border_radius=3)
     disp_text("back",text_font,(7,0,0),display.get_width()-150,display.get_height()-36)
     disp_text("how to play",text_font_big,(0,0,0),center_x,10)
     disp_text("W - move forward",text_font,(0,0,0),center_x-200,50)
@@ -1334,7 +1374,28 @@ def respawn_menue(level,create_surf=True, p_size_x=100, p_size_y=100, y_pos=20):
             menu_surface.blit(img, (p_size_x * ind, 0))
             rects.append([plane,img.get_rect(),(p_size_x * ind, 0)])
         print(f"planes in level >{plane_count}")
+        pygame.draw.rect(menu_surface, (50, 50, 50), background_rect, width=4, border_radius=10)
         return menu_surface,rects
+
+def wepons_menue():
+    player = player1
+    wep_list = player.data['wepons']
+    num = player.num
+    curent_wep = player.wepon
+    box_width = len(wep_list) * 80
+    pygame.draw.rect(display,(100,100,100),(center_x-(box_width/2),display.get_height()-85,box_width,80),border_radius=10)
+    pygame.draw.rect(display,(50,50,50),(center_x-(box_width/2),display.get_height()-85,box_width,80),width= 4,border_radius=10)
+    for ind,wep in enumerate(wep_list):
+        img = pygame.image.load(f"wepons/{wep}.png").convert_alpha()
+        img = pygame.transform.scale(img, (60, 60))
+        x_pos = center_x - (box_width/2) + (ind * 80) + 10
+        y_pos = display.get_height() - 75
+        display.blit(img, (x_pos, y_pos))
+        if wep == curent_wep:
+            pygame.draw.rect(display,(0,255,0),(x_pos-5,y_pos-5,70,70),width= 4,border_radius=10)
+        if ind + 1 == num:
+            pygame.draw.rect(display,(255,255,0),(x_pos-5,y_pos-5,70,70),width= 4,border_radius=10)
+        disp_text(f"{ind+1}",text_font,(0,0,0),x_pos+30,y_pos+65)
 
 
 def respawn_check(plane,is_ai):
@@ -1383,13 +1444,13 @@ def update_ai(ai):
         del ai
 
 def update_B(all_B):
-    global simulation_dist,player1
+    global simulation_dist
     for bullet in all_B:
-            if bullet.dist <= simulation_dist:
-                bullet.update(display,camra)
-            if bullet.life_time <= 0:
-               del bullet
-            
+        if bullet.dist <= simulation_dist:
+            bullet.update(display,camra)
+        else:
+            bullet.life_time -= 2 
+
 def manage_ais():
     global all_ais,all_bullets,all_planes,loops,all_xp,settings_data,simulation_dist,player1
     if len(all_ais) <= settings_data['max_ais']:
@@ -1418,6 +1479,8 @@ def manage_xp():
     for xp in all_xp:
         if xp.player_dist <= simulation_dist:
             xp.update(display,camra)
+        else:
+            xp.life_time -= 2
         if xp.life_time <= 0:
             all_xp.remove(xp)
             del xp
@@ -1475,8 +1538,8 @@ respawn_lev = None
 R_menue_G = None
 vol = 0
 UI = 1
-simulation_dist = 2000
 
+simulation_dist = 2000
 menue_songs = ["sounds/to_be_continued.mp3","sounds/still_alive.mp3"]
 pygame.mixer.init()
 main_channel = pygame.mixer.Channel(0)
@@ -1511,4 +1574,5 @@ while runing:
     window.blit(s_display,W_pos)
     print(f"loops are at {loops}")
     pygame.display.flip()
-    clock.tick(20)
+
+    clock.tick(20.5)

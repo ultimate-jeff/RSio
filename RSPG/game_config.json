@@ -6,6 +6,7 @@
     "pt-17.png",
     "RSPG.exe",
     "RSPG.py",
+    "RSPG.pyproj",
     "data/ai_names.json",
     "data/death_msgs.json",
     "data/powers.json",
@@ -15,6 +16,7 @@
     "images/smoke1.png",
     "images/xp.json",
     "images/xp.png",
+    "images/xp_para.png",
     "planes/A4_skyraider.png",
     "planes/a6m_zero.png",
     "planes/albatros_dv.png",
@@ -61,7 +63,9 @@
     "sounds/still_alive.mp3",
     "sounds/to_be_continued.mp3",
     "tarane/map1.png",
-    "tarane/watter.png",
+    "tarane/map2.png",
+    "tarane/structures/HP.png",
+    "tarane/structures/templates/HP.json",
     "wepons/bullet.png",
     "wepons/fast_bullet.png",
     "wepons/misall1.png",
@@ -69,5 +73,6 @@
     "wepons/wepon_stats/fast_bullet.json",
     "wepons/wepon_stats/misall1.json"
   ],
-  "curent_files": []
+  "curent_files": [
+  ]
 }

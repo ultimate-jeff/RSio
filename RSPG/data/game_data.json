@@ -1,0 +1,27 @@
+{
+  "buttons": [
+    {
+      "menue": "main",
+      "sizex": 200,
+      "sizey": 60,
+      "x": 650,
+      "y": 385,
+      "text": " ",
+      "image_path": "images/buttons/play.png",
+      "image": "None"
+    },
+    {
+      "menue": "main",
+      "sizex": 150,
+      "sizey": 30,
+      "x": 1300,
+      "y": 650,
+      "text": " ",
+      "image_path": "images/buttons/how_to_play.png",
+      "image": "None"
+    }
+
+
+  ]
+
+}
