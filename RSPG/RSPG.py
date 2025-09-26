@@ -220,17 +220,16 @@ def play_sound(file_path, volume=0.5):
 # init game_data
 menue_buttone_data = game_data['buttons']
 for button in menue_buttone_data:
-    bimg = pygame.image.load(button['image_path'])
+    bimg = pygame.image.load(button['image_path']).convert_alpha()
     bimg = pygame.transform.scale(bimg, (button['sizex'], button['sizey']))
     button['image'] = bimg
     
 
 class Parical():
-    def __init__(self,WT,x,y,direction,user_name=None):
+    def __init__(self,WT,x,y,direction,user_name=None,NW_OW="server"):
         self.WT = WT
         self.x = x
         self.y = y
-        self.speed = 0
         with open(f"images/{WT}.json") as file:
             data = json.load(file)
         self.data = data
@@ -238,27 +237,15 @@ class Parical():
         self.sizex = data['sizex']
         self.sizey = data['sizey']
         self.life_time = data['life_time']
-        rad = math.radians(direction)
-        delta_x = -self.speed * math.sin(rad)
-        delta_y = -self.speed * math.cos(rad)
-        self.x += delta_x
-        self.y += delta_y
-        self.dx = delta_x
-        self.dy = delta_y
         self.original_image = pygame.image.load(f"images/{WT}.png")
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.rect = self.image.get_rect(center=(500, 350))
+        self.current_scaled_image = self.image
         self.owner = user_name
         self.screen_rect = self.rect
-        self.update(display,camra)
-        self.scaled_width = int(self.original_image.get_width() * camra.zoom)
-        self.scaled_height = int(self.original_image.get_height() * camra.zoom)
-
-        #self.screen_x = ((self.x ) + camra.offset_x)
-        #self.screen_y = ((self.y ) + camra.offset_y)
-
         self.player_dist = 0
+        self.update(display,camra)
 
     def update_player_dist(self):
         global player1
@@ -268,33 +255,26 @@ class Parical():
         
 
     def update(self, display_surface, camera_obj):
-        self.x += self.dx
-        self.y += self.dy
         self.life_time -= 1
-        self.rect.center = (self.x, self.y)
-        self.current_scaled_image = self.image 
-        self.screen_x = ((self.x )+ camra.offset_x)
-        self.screen_y = ((self.y )+ camra.offset_y)
-        if loops % 4 == 0:
+        if loops % 8 == 2:
             self.update_player_dist()
-        screen_rect = self.current_scaled_image.get_rect(center=(self.screen_x, self.screen_y))
-        display_surface.blit(self.current_scaled_image, screen_rect)
-        self.screen_rect = screen_rect
-        return screen_rect
+        self.screen_rect = self.current_scaled_image.get_rect(center=((self.x+ camra.offset_x), (self.y+ camra.offset_y)))
+        display_surface.blit(self.current_scaled_image, self.screen_rect)
+        return self.screen_rect
 
     def blit(self,display_surface):
         display_surface.blit(self.current_scaled_image,self.screen_rect)
 
 class AI():
-    def __init__(self,all_planes,all_bullets,all_xp):
+    def __init__(self,all_planes,all_bullets,all_xp,NW_OW="server"):
         global player1
         with open("data/ai_names.json","r") as file:
             plane_names = json.load(file)
         self.all_xp = all_xp
         self.all_planes = all_planes
-        self.plane = Plane(random.choice(plane_names['names']),random.choice(level1))
+        self.plane = Plane(random.choice(plane_names['names']),random.choice(level1),NW_OW=NW_OW)
         self.fired = self.plane.fired
-        self.health = self.plane.health
+        #self.health = self.plane.health
         self.target = None
         all_planes.append(self.plane)
         self.all_planes.remove(self.plane)
@@ -303,7 +283,6 @@ class AI():
         self.rand1 = random.randint(-2,30)
         self.rand2 = random.randint(-32,32)
         self.un_loaded_ticks = 0
-
         self.player_dist = 0
 
     def update_player_dist(self):
@@ -313,17 +292,12 @@ class AI():
         self.player_dist = math.hypot(dx, dy)
 
     def find_target(self, all_objects, distance):
-        closest = None
-        closest_dist = float('inf')
-        for obj in all_objects:
-            dx = obj.x - self.plane.x
-            dy = obj.y - self.plane.y
-            dist = math.hypot(dx, dy)
-            if dist < closest_dist and dist <= distance:
-              if not obj.PT == "pNone":
-                closest = obj
-                closest_dist = dist
-        return closest
+        # Only consider planes within a certain distance
+        nearby = [obj for obj in all_objects if math.hypot(obj.x - self.plane.x, obj.y - self.plane.y) <= distance and obj.PT != "pNone"]
+        if not nearby:
+            return None
+        # Find the closest
+        return min(nearby, key=lambda obj: math.hypot(obj.x - self.plane.x, obj.y - self.plane.y))
 
     def whay_ops(self):
         if self.target != None:
@@ -488,7 +462,7 @@ class AI():
         frontBack, leftRite, spaceShif, num_k = 0,0,0,0
         if loops % 2 == 0:
             self.confidance = self.whay_ops()
-        if loops % 4 == 0:
+        if loops % 8 == 4:
             self.update_player_dist()
             self.target = self.find_target(self.all_planes,800)
         xp_conf = self.whay_xp()
@@ -516,7 +490,7 @@ class AI():
                 self.plane.ai_event(loops,frontBack, leftRite, spaceShif, 0)
 
 class Wepons():
-    def __init__(self,WT,x,y,direction,user_name):
+    def __init__(self,WT,x,y,direction,user_name,NW_OW="server"):
         self.WT = WT
         self.x = x
         self.y = y
@@ -560,59 +534,6 @@ class Wepons():
             self.has_ai = True
             self.target = self.find_closest_target(simulation_dist)
 
-            
-    def change_direction(self,new_angle):
-        self.angle = new_angle
-        rad = math.radians(new_angle)
-        self.dx = -self.speed * math.sin(rad)
-        self.dy = -self.speed * math.cos(rad)
-        self.original_image = pygame.transform.scale(self.Roriginal_image,(self.sizex,self.sizey))
-        self.original_image = pygame.transform.rotate(self.original_image, new_angle)
-
-    def ai_turn(self,LeftRite):
-        new_angle = self.angle
-        if LeftRite == 1:
-            new_angle = (self.angle - self.turn_speed) % 360
-        elif LeftRite == 2:
-            new_angle = (self.angle + self.turn_speed) % 360
-        elif LeftRite == 0:
-            pass
-        self.change_direction(new_angle)
-
-    def find_closest_target(self,distance=1000):
-        #global all_planes
-        closest = None
-        closest_dist = float('inf')
-        for obj in all_planes:
-            if obj.PT != "pNone" and obj.user_name != self.owner:
-                dx = obj.x - self.x
-                dy = obj.y - self.y
-                dist = math.hypot(dx, dy)
-                if dist < closest_dist and dist <= distance:
-                    closest = obj
-                    closest_dist = dist
-        return closest
-
-
-    def find_target_angle(self):
-        tar_x = self.target.x
-        tar_y = self.target.y
-        dx = tar_x - self.x
-        dy = tar_y - self.y
-        angle_to_target = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
-        return angle_to_target
-
-    def ai_event(self):
-        tar_ang = self.find_target_angle()
-        LeftRite = 0
-        ang_dif = (tar_ang - self.angle % 360)
-        if ang_dif > 0:
-            LeftRite = 2
-        elif ang_dif < 0:
-            LeftRite = 1
-        self.ai_turn(tar_ang)
-
-
     def update_player_dist(self):
         global player1
         dx = self.x - player1.x
@@ -623,14 +544,11 @@ class Wepons():
         self.x += self.dx
         self.y += self.dy
         self.life_time -= 1
-        if self.life_time >= 0: 
-            if loops % 5 == 1:
-                self.update_player_dist()
-            screen_x = (self.x * camera_obj.zoom) + camera_obj.offset_x
-            screen_y = (self.y * camera_obj.zoom) + camera_obj.offset_y
-            screen_rect = self.original_image.get_rect(center=(screen_x, screen_y))
-            display_surface.blit(self.original_image, screen_rect)
-            return screen_rect
+        if loops % 5 == 1:
+            self.update_player_dist()
+        #screen_rect = self.original_image.get_rect(center=(self.x + camera_obj.offset_x, self.y + camera_obj.offset_y))
+        display_surface.blit(self.original_image, self.original_image.get_rect(center=(self.x + camera_obj.offset_x, self.y + camera_obj.offset_y)))
+        return 0 #screen_rect
 
     def scater(self):
         global all_bullets,display,camra
@@ -643,11 +561,6 @@ class Wepons():
           
     def fire(self):
         #global vol
-        """
-        dx = self.x - player1.x
-        dy = self.y - player1.y
-        self.dist = math.hypot(dx, dy)
-        """
         max_vol = vol + 1
         max_dist = 2000
         clamped_dist = min(self.dist, max_dist)
@@ -659,11 +572,9 @@ class Wepons():
         sound.play()
 
     def hit(self):
-        
         dx = self.x - player1.x
         dy = self.y - player1.y
         self.dist = math.hypot(dx, dy)
-        
         max_vol = vol + 0.3
         max_dist = 1000
         clamped_dist = min(self.dist, max_dist)
@@ -676,7 +587,7 @@ class Wepons():
 
 class Plane():
 
-    def __init__(self,user_name,PT):
+    def __init__(self,user_name,PT,NW_OW="server"):
         global all_bullets,player1,WORLD_HIGHT,WORLD_WIDTH
         self.user_name = user_name
         self.angle = 0
@@ -712,6 +623,7 @@ class Plane():
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.Rect = self.image.get_rect(center=(center_x, center_y))
+        self.screen_rect = self.Rect
         self.num = 0
         self.xp = 0
         self.fired = 0
@@ -803,12 +715,13 @@ class Plane():
             B1.fire()
             all_bullets.append(B1)
             self.fired += 1
-            print(f"fired {self.fired} bullets {self.fired} \n")
 
     def update_bullets(self,all_bullets,owners_bullets=False):
+        self.screen_rect = self.image.get_rect(center=(self.x, self.y))
         for bullet in all_bullets:
+                bullet.screen_rect = bullet.image.get_rect(center=(bullet.x, bullet.y))
                 if bullet.owner != self.user_name:
-                    if bullet.rect.colliderect((self.x,self.y,self.sizex,self.sizey)):
+                    if bullet.screen_rect.colliderect(self.screen_rect):#(self.x,self.y,self.sizex,self.sizey)
                         self.health -= bullet.damage / self.armor
                         bullet.hit()
                         bullet.life_time = 0
@@ -823,13 +736,11 @@ class Plane():
                         all_bullets.remove(bullet)
                         del bullet
             
-
     def collect_xp(self):
         global all_xp
         for Xp in all_xp:
             Xp.blit(display)
             if self.Rect.colliderect(Xp.screen_rect):
-                print(f"{self.user_name} has colected {Xp.amount} XP")
                 self.xp += Xp.amount
                 pygame.draw.rect(display,(255,0,0),Xp.screen_rect)
                 Xp.life_time = 0
@@ -1054,7 +965,6 @@ class Plane():
         print(f"AI>{self.user_name}s health is {self.health}")
         return presed
 
-
 def event():
     global runing,g,text,Menue,camra_zoom,all_xp,R_menue_G,player1,button_rects,respawn_lev,vol,settings_data,all_planes,all_ais,levels,vol,mouse_pos,UI
     for event in pygame.event.get():
@@ -1130,8 +1040,8 @@ def Game():
     global runing,g,text,Menue,camra_zoom,all_xp,R_menue_G,player1,button_rects,respawn_lev,vol,settings_data,all_planes,all_ais,levels,vol,mouse_pos,UI,heal_amount,loops
     heal_amount = random.randint(0,20)
     player1.event(loops)
-    print(f"======= all_planes> {len(all_planes)}")
-    print(f"======= all_bullets> {len(all_bullets)}")
+    #print(f"======= all_planes> {len(all_planes)}")
+    #print(f"======= all_bullets> {len(all_bullets)}")
     manage_xp()
     manage_ais()
     update_B(all_bullets)
@@ -1141,7 +1051,7 @@ def Game():
         respawn_check(player1,False)
         #xp_cluster = get_xp_clusters()
         all_planes = get_ranked_planes()
-        print(f"xp clusters are at {len(xp_cluster)}")
+        #print(f"xp clusters are at {len(xp_cluster)}")
     if respawn_lev != None and R_menue_G != None:
         display.blit(R_menue_G,(center_x-R_menue_G.get_width()/2,20))
     event()
@@ -1164,6 +1074,7 @@ def main_menue():
     DT = "enter username"
     if text != "":
         DT = text
+
     # text box
     pygame.draw.rect(display,(100,100,100,100),(center_x-200,center_y-50,400,50),border_radius=20)
     pygame.draw.rect(display,(50,50,50,0),(center_x-200,center_y-50,400,50),width= 4,border_radius=15)
@@ -1182,8 +1093,9 @@ def main_menue():
     disp_text("settings ",text_font,(7,0,0),display.get_width()-150,display.get_height()-36)
     # qit button
     quit_rect = pygame.draw.rect(display,(150,50,50),(10,display.get_height()-50,150,30),border_radius=6)
-    pygame.draw.rect(display,(100,0,0),(10,display.get_height()-50,150,30),width= 2,border_radius=6)
-    disp_text("quit",text_font,(7,0,0),75,display.get_height()-36)
+    display.blit(menue_buttone_data[2]["image"],(menue_buttone_data[2]['x'],menue_buttone_data[2]['y']))
+    #pygame.draw.rect(display,(100,0,0),(10,display.get_height()-50,150,30),width= 2,border_radius=6)
+    #disp_text("quit",text_font,(7,0,0),75,display.get_height()-36)
     # how to play button
     how_to_play_rect = pygame.draw.rect(display,(100,100,100),(display.get_width()-200,display.get_height()-100,150,30),border_radius=3)
     display.blit(menue_buttone_data[1]["image"],(menue_buttone_data[1]['x'],menue_buttone_data[1]['y']))
@@ -1267,7 +1179,8 @@ def settings_menue():
 
     dev_ops_rect = pygame.draw.rect(display,(100,100,100),(display.get_width()-200,display.get_height()-100,150,30),border_radius=3)
     pygame.draw.rect(display,(50,50,50),(display.get_width()-200,display.get_height()-100,150,30),width= 2,border_radius=3)
-    disp_text(f"dev ops {data["dev_ops"]}",text_font,(7,0,0),display.get_width()-150,display.get_height()-86)
+    D_I = data["dev_ops"]
+    disp_text(f"dev ops {D_I}",text_font,(7,0,0),display.get_width()-150,display.get_height()-86)
 
     ai_count_rect = pygame.draw.rect(display,(100,150,100),(display.get_width()-200,display.get_height()-150,150,30),border_radius=3)
     pygame.draw.rect(display,(50,100,50),(display.get_width()-200,display.get_height()-150,150,30),width= 2,border_radius=3)
@@ -1449,7 +1362,7 @@ def update_B(all_B):
         if bullet.dist <= simulation_dist:
             bullet.update(display,camra)
         else:
-            bullet.life_time -= 2 
+            bullet.life_time -= 3
 
 def manage_ais():
     global all_ais,all_bullets,all_planes,loops,all_xp,settings_data,simulation_dist,player1
@@ -1479,11 +1392,13 @@ def manage_xp():
     for xp in all_xp:
         if xp.player_dist <= simulation_dist:
             xp.update(display,camra)
+            if xp.life_time <= 0:
+                all_xp.remove(xp)
+                del xp
         else:
-            xp.life_time -= 2
-        if xp.life_time <= 0:
             all_xp.remove(xp)
             del xp
+        
 
 def get_xp_clusters(cluster_radius=50):
     """
@@ -1576,3 +1491,5 @@ while runing:
     pygame.display.flip()
 
     clock.tick(20.5)
+
+
