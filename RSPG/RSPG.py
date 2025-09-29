@@ -6,6 +6,7 @@ import random
 import time
 import json
 import numpy as np
+import os
 
 
 
@@ -223,10 +224,31 @@ for button in menue_buttone_data:
     bimg = pygame.image.load(button['image_path']).convert_alpha()
     bimg = pygame.transform.scale(bimg, (button['sizex'], button['sizey']))
     button['image'] = bimg
-    
+
+class PacketBuilder:
+    @staticmethod
+    def build(tick, planes, bullets, particles, ais):
+        return {
+            "T": "tick",
+            "tick": tick % 32767,
+            "P": [p.to_dict() for p in planes],
+            "B": [b.to_dict() for b in bullets],
+            "p": [px.to_dict() for px in particles],
+            "AI": [ai.to_dict() for ai in ais]
+        }
+
+    @staticmethod
+    def to_json(packet_dict):
+        return json.dumps(packet_dict)
+
+    @staticmethod
+    def from_json(packet_str):
+        return json.loads(packet_str)
+
 
 class Parical():
     def __init__(self,WT,x,y,direction,user_name=None,NW_OW="server"):
+        self.NW_OW = NW_OW
         self.WT = WT
         self.x = x
         self.y = y
@@ -246,6 +268,39 @@ class Parical():
         self.screen_rect = self.rect
         self.player_dist = 0
         self.update(display,camra)
+
+    def to_dict(self):
+        return {
+            "x": round(self.x, 2),
+            "y": round(self.y, 2),
+            "ang": 0, 
+            "LT": int(self.life_time),
+            "PT": self.WT,
+            "o": self.NW_OW
+        }
+
+    def load_frome_paket(self, data):
+        self.x = data['x']
+        self.y = data['y']
+        self.life_time = data['LT']
+        self.WT = data['PT']
+        self.owner = data['O']
+        self.NW_OW = data['o']
+        with open(f"images/{self.WT}.json") as file:
+            data = json.load(file)
+        self.data = data
+        self.amount = data['amount']
+        self.sizex = data['sizex']
+        self.sizey = data['sizey']
+        self.life_time = data['life_time']
+        self.original_image = pygame.image.load(f"images/{self.WT}.png")
+        self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
+        self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
+        self.rect = self.image.get_rect(center=(500, 350))
+        self.current_scaled_image = self.image
+        self.owner = user_name
+        self.screen_rect = self.rect
+        self.player_dist = 0
 
     def update_player_dist(self):
         global player1
@@ -268,6 +323,7 @@ class Parical():
 class AI():
     def __init__(self,all_planes,all_bullets,all_xp,NW_OW="server"):
         global player1
+        self.NW_OW = NW_OW
         with open("data/ai_names.json","r") as file:
             plane_names = json.load(file)
         self.all_xp = all_xp
@@ -284,6 +340,15 @@ class AI():
         self.rand2 = random.randint(-32,32)
         self.un_loaded_ticks = 0
         self.player_dist = 0
+
+    def to_dict(self):
+        return {
+            "PD": int(self.player_dist),
+            "ULT": int(self.un_loaded_ticks),
+            "r1": self.rand1,
+            "r2": self.rand2,
+            "o": self.NW_OW
+        }
 
     def update_player_dist(self):
         global player1
@@ -491,6 +556,7 @@ class AI():
 
 class Wepons():
     def __init__(self,WT,x,y,direction,user_name,NW_OW="server"):
+        self.NW_OW = NW_OW
         self.WT = WT
         self.x = x
         self.y = y
@@ -533,6 +599,17 @@ class Wepons():
             self.turn_speed = data['turn_speed']
             self.has_ai = True
             self.target = self.find_closest_target(simulation_dist)
+
+    def to_dict(self):
+        return {
+            "x": round(self.x, 2),
+            "y": round(self.y, 2),
+            "ang": round(self.angle, 2),
+            "LT": int(self.life_time),
+            "BT": self.WT,
+            "O": self.owner,
+            "o": self.NW_OW
+        }
 
     def update_player_dist(self):
         global player1
@@ -589,6 +666,7 @@ class Plane():
 
     def __init__(self,user_name,PT,NW_OW="server"):
         global all_bullets,player1,WORLD_HIGHT,WORLD_WIDTH
+        self.NW_OW = NW_OW
         self.user_name = user_name
         self.angle = 0
         self.speed = 1
@@ -663,9 +741,19 @@ class Plane():
         self.death_cause = ["None",""]
 
     def pacager(self,mods):
-        # format for mods is a dict -> [atribute_name: value]
-        atribute_name = mods[0]
-        vlues = mods[1]
+        # this is for packaging data to send over the network
+        pass
+
+    def to_dict(self):
+        return {
+            "id": self.user_name,
+            "x": round(self.x, 2),
+            "y": round(self.y, 2),
+            "ang": round(self.angle, 2),
+            "H": int(self.health),
+            "PT": self.PT,
+            "o": self.NW_OW
+        }
 
     def rotate(self):
         self.image = pygame.transform.rotate(self.original_image, self.angle)
@@ -999,7 +1087,7 @@ def event():
                 pygame.mixer_music.stop()
                 pygame.mixer.music.stop()
                 main_channel.stop()
-                pygame.mixer.music.load("sounds/still_alive.mp3")
+                pygame.mixer.music.load(random.choice(menue_songs))
                 pygame.mixer.music.set_volume(vol + 1)
                 pygame.mixer_music.play(-1)
             if event.key == pygame.K_F3:
@@ -1040,18 +1128,21 @@ def Game():
     global runing,g,text,Menue,camra_zoom,all_xp,R_menue_G,player1,button_rects,respawn_lev,vol,settings_data,all_planes,all_ais,levels,vol,mouse_pos,UI,heal_amount,loops
     heal_amount = random.randint(0,20)
     player1.event(loops)
-    #print(f"======= all_planes> {len(all_planes)}")
-    #print(f"======= all_bullets> {len(all_bullets)}")
     manage_xp()
     manage_ais()
     update_B(all_bullets)
     player1.update_bullets(all_bullets)
     player1.collect_xp()
+
     if loops % 8:
         respawn_check(player1,False)
-        #xp_cluster = get_xp_clusters()
         all_planes = get_ranked_planes()
-        #print(f"xp clusters are at {len(xp_cluster)}")
+        """
+        packet = PacketBuilder.build(loops, all_planes, all_bullets, all_xp, all_ais)
+        with open(f"logs/sent_packets/_P-{loops}.json", "w") as f:
+            f.write(PacketBuilder.to_json(packet))
+            print(f"logs/sent_packets/_P-{loops}.json   was sucsesfuly saved")
+        """
     if respawn_lev != None and R_menue_G != None:
         display.blit(R_menue_G,(center_x-R_menue_G.get_width()/2,20))
     event()
@@ -1069,6 +1160,8 @@ def Game():
     disp_text(f"x: {int(player1.x)} y: {int(player1.y)}",text_font,(0,0,0),100,70)
     wepons_menue()
 
+    packet = PacketBuilder.build(loops, all_planes, all_bullets, all_xp, all_ais)
+
 def main_menue():
     global runing,g,text,typing,user_name,Menue,player1,all_planes,R_menue_G,player1,button_rects,respawn_lev,vol,mouse_pos
     DT = "enter username"
@@ -1085,22 +1178,17 @@ def main_menue():
     display.blit(img,(center_x-220,center_y-80))
     # play button
     play_rect = pygame.rect.Rect(center_x-100,center_y+10,200,60)
-    display.blit(menue_buttone_data[0]["image"],(menue_buttone_data[0]['x'],menue_buttone_data[0]['y']))
+    display.blit(menue_buttone_data[0]["image"].convert_alpha(),(menue_buttone_data[0]['x'],menue_buttone_data[0]['y']))
     # setings button
-
     settintg_rect = pygame.draw.rect(display,(100,150,100),(display.get_width()-200,display.get_height()-50,150,30),border_radius=3)
     pygame.draw.rect(display,(50,100,50),(display.get_width()-200,display.get_height()-50,150,30),width= 2,border_radius=3)
     disp_text("settings ",text_font,(7,0,0),display.get_width()-150,display.get_height()-36)
     # qit button
     quit_rect = pygame.draw.rect(display,(150,50,50),(10,display.get_height()-50,150,30),border_radius=6)
-    display.blit(menue_buttone_data[2]["image"],(menue_buttone_data[2]['x'],menue_buttone_data[2]['y']))
-    #pygame.draw.rect(display,(100,0,0),(10,display.get_height()-50,150,30),width= 2,border_radius=6)
-    #disp_text("quit",text_font,(7,0,0),75,display.get_height()-36)
+    display.blit(menue_buttone_data[2]["image"].convert_alpha(),(menue_buttone_data[2]['x'],menue_buttone_data[2]['y']))
     # how to play button
     how_to_play_rect = pygame.draw.rect(display,(100,100,100),(display.get_width()-200,display.get_height()-100,150,30),border_radius=3)
-    display.blit(menue_buttone_data[1]["image"],(menue_buttone_data[1]['x'],menue_buttone_data[1]['y']))
-    #pygame.draw.rect(display,(50,50,50),(display.get_width()-200,display.get_height()-100,150,30),width= 2,border_radius=3)
-    #disp_text("how to play",text_font,(7,0,0),display.get_width()-148,display.get_height()-86)
+    display.blit(menue_buttone_data[1]["image"].convert_alpha(),(menue_buttone_data[1]['x'],menue_buttone_data[1]['y']))
     
     disp_text("your plane will be randomly selected from level 1",text_font,(100,0,0),center_x,10)
 
@@ -1390,15 +1478,29 @@ def manage_xp():
         Xp.update(display,camra)
         all_xp.append(Xp)
     for xp in all_xp:
-        if xp.player_dist <= simulation_dist:
-            xp.update(display,camra)
-            if xp.life_time <= 0:
+        #if xp.NW_OW == "client":
+            if xp.player_dist <= simulation_dist:
+                xp.update(display,camra)
+                if xp.life_time <= 0:
+                    all_xp.remove(xp)
+                    del xp
+            else:
                 all_xp.remove(xp)
                 del xp
+                """
         else:
-            all_xp.remove(xp)
-            del xp
-        
+            if loops % 4 == 0:
+                pupdate = packet['p'][all_xp.index(xp)]
+                xp.load_frome_paket()
+            if xp.player_dist <= simulation_dist:
+                xp.update(display,camra)
+                if xp.life_time <= 0:
+                    all_xp.remove(xp)
+                    del xp
+            else:
+                all_xp.remove(xp)
+                del xp
+        """
 
 def get_xp_clusters(cluster_radius=50):
     """
@@ -1453,16 +1555,15 @@ respawn_lev = None
 R_menue_G = None
 vol = 0
 UI = 1
-
+packet = PacketBuilder.build(loops, all_planes, all_bullets, all_xp, all_ais)
 simulation_dist = 2000
-menue_songs = ["sounds/to_be_continued.mp3","sounds/still_alive.mp3"]
+menue_songs = settings_data["menue_songs"]
 pygame.mixer.init()
 main_channel = pygame.mixer.Channel(0)
 pygame.mixer.set_num_channels(32)
 
 mx, my = pygame.mouse.get_pos()
 mouse_pos = (((mx - W_pos[0]) / scale),((my - W_pos[1]) / scale))
-
 
 camra.camera_render(random.randint(0, int(float(WORLD_WIDTH) / 1.1)),random.randint(0,int(float(WORLD_HIGHT) / 1.1)))
 pygame.mixer.music.load(random.choice(menue_songs))

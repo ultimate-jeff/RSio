@@ -19,6 +19,16 @@
       "text": " ",
       "image_path": "images/buttons/how_to_play.png",
       "image": "None"
+    },
+    {
+      "menue": "main",
+      "sizex": 150,
+      "sizey": 30,
+      "x": 10,
+      "y": 700,
+      "text": " ",
+      "image_path": "images/buttons/quit.png",
+      "image": "None"
     }
 
 
