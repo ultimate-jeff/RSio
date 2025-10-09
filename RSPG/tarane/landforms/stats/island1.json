@@ -1,0 +1,13 @@
+{
+  "natual_tempature": 6,
+  "costom_scrips": [],
+  "clusterabilaty": 0,
+
+  "deals_damage": false,
+  "moveble": false,
+  "pushes_streanth": 0,
+  "push_angle": 0,
+  "rotation_angle": 0,
+  "rotation_speed": 0,
+  "aplies_turbulence": false
+}

@@ -95,24 +95,7 @@ class Chunk:
         return self._scaled
 
     def generate_terrain(self):
-        """
-        base_color = (25, 60, 150) if random.random() < 0.6 else (40, 100, 190)
-
-        # Add slight variation to avoid flat look
-        variation = (
-            min(255, max(0, base_color[0] + random.randint(-10, 10))),
-            min(255, max(0, base_color[1] + random.randint(-10, 10))),
-            min(255, max(0, base_color[2] + random.randint(-10, 10)))
-        )
-        self.surf.fill((*variation, 255))"""
-
-        if len(seed_obj['x']) == len(seed_obj['y']):
-            chunk_rect = pygame.Rect(self.cx * self.size, self.cy * self.size, self.size, self.size)
-            for land in seed_obj['x']:
-                land_rect = pygame.Rect(land, seed_obj['y'][seed_obj['x'].index(land)], seed_obj['size'][seed_obj['x'].index(land)], seed_obj['size'][seed_obj['x'].index(land)])
-                if chunk_rect.colliderect(land_rect):
-                    land_color = temp_to_color(seed_obj['temp'][seed_obj['x'].index(land)])
-                    pygame.draw.ellipse(self.surf, land_color, land_rect.move(-chunk_rect.x, -chunk_rect.y))
+        pass
 
 def get_chunk(cx, cy):
     if (cx, cy) not in tiles:

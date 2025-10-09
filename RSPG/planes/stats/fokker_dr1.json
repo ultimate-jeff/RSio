@@ -6,6 +6,8 @@
   "reload_speed": 1.5,
   "sizex": 70,
   "sizey": 100,
+  "HB_sizex": 60,
+  "HB_sizey": 90,
   "top_speed": 4,
   "min_speed": 2,
   "turn_speed": 8,

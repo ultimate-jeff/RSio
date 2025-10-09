@@ -1,0 +1,5 @@
+{
+  "wepons": [ "bullet", "fast_bullet" ],
+  "planes": [ "pt-17" ],
+  "particals": ["xp","death_xp"]
+}

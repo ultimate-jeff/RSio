@@ -1,5 +1,6 @@
 
-#from cam import Chunk, get_chunk, GameCamera
+from encodings.punycode import T
+import sys
 import math
 import pygame
 import random
@@ -7,8 +8,18 @@ import time
 import json
 import numpy as np
 import os
+import pyperclip
 
-
+# Define color codes
+prin_RED = '\033[91m'
+prin_GREEN = '\033[92m'
+prin_BLUE = '\033[94m'
+prin_RESET = '\033[0m'  # Resets to default color and style
+"""
+print(f"{prin_RED}This text is red.{prin_RESET}")
+print(f"{prin_GREEN}This text is green.{prin_RESET}")
+print(f"{prin_BLUE}This text is blue.{prin_RESET} And this is normal again.")
+"""
 
 with open("planes/levels.json","r") as file:
     levels = json.load(file)
@@ -20,12 +31,15 @@ with open("data/death_msgs.json","r") as file:
     death_msgs = json.load(file)
 with open("data/game_data.json","r") as file:
     game_data = json.load(file)
+with open("data/powers.json","r") as file:
+    powers_data = json.load(file)
+with open("planes/levels.json","r") as file1:
+    lev_data = json.load(file1)
 
-
+texture_map = {}
 
 pygame.init()
 runing = True
-
 WORLD_WIDTH = 20000
 WORLD_HIGHT = 20000
 CHUNK_SIZE = 1000
@@ -38,6 +52,7 @@ img = pygame.transform.scale(img, (CHUNK_SIZE, CHUNK_SIZE))
 
 # dictionary for lazy-loaded chunks
 tiles = {}  # key = (cx, cy), value = Chunk object
+
 
 seed_obj = {
     "x": [
@@ -54,47 +69,29 @@ seed_obj = {
         2800, 4600, 6300, 7700, 9400, 10800, 12100, 13300, 14400, 15500,
         16600, 17700, 18800, 19900, 2350, 4750, 6900, 9050, 11250, 13750
     ],
-    "size": [
+    "sizex": [
         300, 150, 450, 200, 350, 500, 400, 600, 250, 300,
         550, 200, 400, 300, 500, 450, 350, 600, 200, 500,
         250, 300, 550, 400, 600, 450, 500, 350, 250, 300,
         500, 600, 450, 200, 300, 350, 400, 500, 250, 600,
         300, 450, 500, 550, 200, 350, 600, 400, 450, 500
     ],
+    "sizey": [
+        400, 150, 450, 200, 350, 500, 400, 600, 250, 300,
+        550, 200, 400, 300, 500, 450, 350, 200, 200, 500,
+        250, 300, 550, 80, 600, 750, 500, 350, 250, 300,
+        500, 600, 450, 200, 300, 350, 400, 500, 250, 600,
+        300, 450, 500, 550, 200, 350, 600, 400, 450, 500
+    ],
     "temp": [
-        3, 7, 1, 9, 5, 2, 6, 8, 4, 10,
+        10, 7, 1, 9, 5, 2, 6, 8, 4, 10,
         1, 5, 7, 2, 9, 3, 6, 8, 4, 10,
         2, 7, 5, 3, 9, 1, 6, 8, 4, 10,
         5, 2, 8, 7, 1, 9, 6, 4, 3, 10,
         7, 2, 6, 9, 5, 1, 4, 8, 3, 10
-    ]
+    ],
+    "particals" : []
 }
-
-
-def temp_to_color(temp):
-    """
-    Approximate mk48.io color palette
-    """
-    if temp <= 1:   # Deep water
-        return (25, 60, 150)
-    elif temp == 2: # Shallow water
-        return (40, 100, 190)
-    elif temp == 3: # Beach / sand
-        return (210, 200, 120)
-    elif temp == 4: # Light grass
-        return (130, 190, 90)
-    elif temp == 5: # Normal grass
-        return (100, 160, 70)
-    elif temp == 6: # Darker grass
-        return (70, 130, 50)
-    elif temp == 7: # Light forest
-        return (50, 110, 40)
-    elif temp == 8: # Dense forest
-        return (30, 90, 30)
-    elif temp == 9: # Rocky / mountain
-        return (110, 110, 110)
-    else:           # Snow / ice cap
-        return (230, 230, 230)
 
 def color_swap(surface: pygame.Surface, old_color: tuple, new_color: tuple) -> pygame.Surface:
     arr_rgb = pygame.surfarray.array3d(surface)
@@ -106,6 +103,20 @@ def color_swap(surface: pygame.Surface, old_color: tuple, new_color: tuple) -> p
     pygame.surfarray.blit_array(new_surface, arr_rgb)
     pygame.surfarray.pixels_alpha(new_surface)[:] = arr_alpha
     return new_surface
+
+def load_texture_map(map_name):
+    global texture_map
+    with open(f"data/texture_maps/{map_name}.json","r") as file:
+        texture_map = json.load(file)
+
+def loading_scren1():
+    display.fill((49, 104, 158))
+    loading_img = pygame.image.load("images/loading_screen1.png").convert_alpha()
+    loading_img = pygame.transform.smoothscale(loading_img, (1000, 750))
+    display.blit(loading_img, (250, 0))
+    s_display = pygame.transform.smoothscale(display, new_size)
+    window.blit(s_display,W_pos)
+    pygame.display.flip()
 
 
 class Chunk:
@@ -129,20 +140,13 @@ class Chunk:
         return self._scaled
 
     def generate_terrain(self):
-
-        if len(seed_obj['x']) == len(seed_obj['y']):
-            chunk_rect = pygame.Rect(self.cx * self.size, self.cy * self.size, self.size, self.size)
-            for land in seed_obj['x']:
-                land_rect = pygame.Rect(land, seed_obj['y'][seed_obj['x'].index(land)], seed_obj['size'][seed_obj['x'].index(land)], seed_obj['size'][seed_obj['x'].index(land)])
-                if chunk_rect.colliderect(land_rect):
-                    land_color = temp_to_color(seed_obj['temp'][seed_obj['x'].index(land)])
-                    pygame.draw.ellipse(self.surf, land_color, land_rect.move(-chunk_rect.x, -chunk_rect.y))
+        pass
 
 def get_chunk(cx, cy):
     #Return chunk at (cx, cy), create if it doesn’t exist yet.
     if (cx, cy) not in tiles:
         tiles[(cx, cy)] = Chunk(cx, cy, CHUNK_SIZE)
-        print(f"Created chunk {cx},{cy}")
+        print(f"{prin_GREEN}Created chunk {cx},{cy}{prin_RESET}")
     return tiles[(cx, cy)]
 
 class GameCamera:
@@ -184,6 +188,7 @@ class GameCamera:
 
 
 loops = 0
+using_texture_map = settings_data['using_texture_pack']
 window = pygame.display.set_mode((1500,750))
 if not pygame.display.is_fullscreen():
     pygame.display.toggle_fullscreen()
@@ -203,7 +208,20 @@ center_x = display.get_width() / 2
 center_y = display.get_height() / 2
 camra = GameCamera(display,CHUNK_SIZE)
 clock = pygame.Clock()
+loading_scren1()
 
+#comon textures
+comon_textures = {}
+CT_img = pygame.image.load("wepons/bullet.png").convert_alpha()
+comon_textures["bullet"] = CT_img
+comon_textures["fast_bullet"] = CT_img
+CT_img = pygame.image.load("Paricals/xp.png").convert_alpha()
+comon_textures["xp"] = CT_img
+CT_img = pygame.image.load("Paricals/death_xp.png").convert_alpha()
+comon_textures["death_xp"] = CT_img
+
+#C:\Users\matth\OneDrive\Desktop\333369.png
+#texture_map1.json
 text_font = pygame.font.SysFont("Arial", 20)
 text_font_big = pygame.font.SysFont("Arial", 50)
 
@@ -217,6 +235,25 @@ def play_sound(file_path, volume=0.5):
     pygame.mixer_music.load(file_path)
     pygame.mixer_music.set_volume(vol + 0.5)
     pygame.mixer_music.play(-1)
+
+def load_image(path,using_TP=False,TP_data=None):
+    if using_TP and TP_data != None:
+        try:
+            new_path = TP_data[path]
+        except Exception:
+            print(f"{prin_RED} !* faild to find {path} in the texture map json {prin_RESET}")
+            new_path=False 
+        if new_path == False:
+            return pygame.image.load(path).convert_alpha()
+        else:
+            try:
+                print("\033[94mloaded texture from texturemap\033[0m")
+                return pygame.image.load(new_path).convert_alpha()
+            except FileNotFoundError:
+                print(f"\033[91m !* file {new_path} not found going to defalt \033[0m")
+                return pygame.image.load(path).convert_alpha()
+    else:
+        return pygame.image.load(path).convert_alpha()
 
 # init game_data
 menue_buttone_data = game_data['buttons']
@@ -247,19 +284,31 @@ class PacketBuilder:
 
 
 class Parical():
-    def __init__(self,WT,x,y,direction,user_name=None,NW_OW="server"):
+    def __init__(self,WT,x,y,direction,user_name=None,NW_OW="server",SX=None,SY=None):
         self.NW_OW = NW_OW
         self.WT = WT
         self.x = x
         self.y = y
-        with open(f"images/{WT}.json") as file:
+        with open(f"Paricals/stats/{WT}.json") as file:
             data = json.load(file)
         self.data = data
+        self.give_pows = data['give_pows']
         self.amount = data['amount']
         self.sizex = data['sizex']
         self.sizey = data['sizey']
         self.life_time = data['life_time']
-        self.original_image = pygame.image.load(f"images/{WT}.png")
+        self.imortal = data['imortal']
+        if SX != None:
+            self.sizex = SX
+            self.sizey = SY
+        if not using_texture_map:
+            if (self.WT == "xp" or self.WT == "death_xp"):
+                self.original_image = comon_textures[self.WT]
+            else:
+                self.original_image = load_image(f"Paricals/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
+                #self.original_image = pygame.image.load(f"Paricals/{WT}.png")
+        else:
+            self.original_image = load_image(f"Paricals/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.rect = self.image.get_rect(center=(500, 350))
@@ -267,7 +316,6 @@ class Parical():
         self.owner = user_name
         self.screen_rect = self.rect
         self.player_dist = 0
-        self.update(display,camra)
 
     def to_dict(self):
         return {
@@ -298,7 +346,6 @@ class Parical():
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.rect = self.image.get_rect(center=(500, 350))
         self.current_scaled_image = self.image
-        self.owner = user_name
         self.screen_rect = self.rect
         self.player_dist = 0
 
@@ -310,15 +357,11 @@ class Parical():
         
 
     def update(self, display_surface, camera_obj):
-        self.life_time -= 1
-        if loops % 8 == 2:
-            self.update_player_dist()
+        if self.life_time != "None":
+            self.life_time -= 1
         self.screen_rect = self.current_scaled_image.get_rect(center=((self.x+ camra.offset_x), (self.y+ camra.offset_y)))
         display_surface.blit(self.current_scaled_image, self.screen_rect)
         return self.screen_rect
-
-    def blit(self,display_surface):
-        display_surface.blit(self.current_scaled_image,self.screen_rect)
 
 class AI():
     def __init__(self,all_planes,all_bullets,all_xp,NW_OW="server"):
@@ -580,7 +623,13 @@ class Wepons():
         self.y += delta_y
         self.dx = delta_x
         self.dy = delta_y
-        self.Roriginal_image = pygame.image.load(f"wepons/{WT}.png")
+        if not using_texture_map:
+            if (self.WT == "xp" or self.WT == "death_xp"):
+                self.Roriginal_image = comon_textures[self.WT]
+            else:
+                self.Roriginal_image = load_image(f"wepons/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        else:
+            self.Roriginal_image = load_image(f"wepons/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.Roriginal_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.Roriginal_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.rotate(self.original_image, direction)
@@ -663,7 +712,6 @@ class Wepons():
         sound.play()
 
 class Plane():
-
     def __init__(self,user_name,PT,NW_OW="server"):
         global all_bullets,player1,WORLD_HIGHT,WORLD_WIDTH
         self.NW_OW = NW_OW
@@ -688,6 +736,8 @@ class Plane():
         self.reload_speed = data['reload_speed']
         self.sizex = data['sizex']
         self.sizey = data['sizey']
+        self.HB_sizex = data['HB_sizex']
+        self.HB_sizey = data['HB_sizey']
         self.top_speed = data['top_speed']
         self.min_speed = data['min_speed']
         self.turn_speed = data['turn_speed']
@@ -696,8 +746,18 @@ class Plane():
         self.wepon_amounts = data['wepon_amounts']
         self.xp_value = data['xp_value']
         self.curent_leval = data['leval']
+        self.turbulance = 0
+        self.curent_pow = []
+        self.pow_duration = 0
+        self.curent_pow_duration = 0
         self.C_amo = self.wepon_amounts[0]
-        self.original_image = pygame.image.load(f"planes/{PT}.png")
+        if not using_texture_map:
+            if (False):
+                self.original_image = comon_textures[self.PT]
+            else:
+                self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        else:
+            self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.Rect = self.image.get_rect(center=(center_x, center_y))
@@ -706,6 +766,7 @@ class Plane():
         self.xp = 0
         self.fired = 0
         self.death_cause = ["None",""]
+        self.hitbox = pygame.rect.Rect(self.x,self.y,self.HB_sizex,self.HB_sizey)
 
     def respawn(self,PT,op_data=None):
         self.PT = PT
@@ -722,6 +783,8 @@ class Plane():
         self.reload_speed = data['reload_speed']
         self.sizex = data['sizex']
         self.sizey = data['sizey']
+        self.HB_sizex = data['HB_sizex']
+        self.HB_sizey = data['HB_sizey']
         self.top_speed = data['top_speed']
         self.min_speed = data['min_speed']
         self.turn_speed = data['turn_speed']
@@ -733,16 +796,77 @@ class Plane():
         self.curent_leval = data['leval']
         if self.wepon_amounts != []:
             self.C_amo = self.wepon_amounts[0]
-        self.original_image = pygame.image.load(f"planes/{PT}.png")
+        if not using_texture_map:
+            if (False):
+                self.original_image = comon_textures[self.PT]
+            else:
+                self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        else:
+            self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.Rect = self.image.get_rect(center=(center_x, center_y))
         self.data = data
         self.death_cause = ["None",""]
+        self.hitbox = pygame.rect.Rect(self.x,self.y,self.HB_sizex,self.HB_sizey)
 
-    def pacager(self,mods):
-        # this is for packaging data to send over the network
-        pass
+    def add_pows(self,Pow):
+        self.acceleration += Pow['acceleration_give']
+        self.armor += Pow['armor_give']
+        self.fire_speed += Pow['fire_speed_give']
+        self.max_health += Pow['health_give']
+        self.health += Pow['health_give']
+        self.reload_speed += Pow['reload_speed_give']
+        self.sizex += Pow['sizex_give']
+        self.sizey += Pow['sizey_give']
+        self.top_speed += Pow['top_speed_give']
+        self.min_speed += Pow['min_speed_give']
+        self.turn_speed += Pow['turn_speed_give']
+        self.turbulance += Pow['tubulance_give']
+        self.angle += Pow['angle_give']
+        self.x += Pow['x_give']
+        self.y += Pow['y_give']
+        self.speed += Pow['speed_give']
+        if Pow['wepons_give'] != []:
+            self.wepon_amounts.append(Pow['wepon_amounts_give'])
+            self.wepons.append(Pow['wepons_give'])
+
+    def remove_pows(self,Pow):
+        self.acceleration -= Pow['acceleration_give']
+        self.armor -= Pow['armor_give']
+        self.fire_speed -= Pow['fire_speed_give']
+        self.max_health -= Pow['health_give']
+        self.health -= Pow['health_give']
+        self.reload_speed -= Pow['reload_speed_give']
+        self.sizex -= Pow['sizex_give']
+        self.sizey -= Pow['sizey_give']
+        self.top_speed -= Pow['top_speed_give']
+        self.min_speed -= Pow['min_speed_give']
+        self.turn_speed -= Pow['turn_speed_give']
+        self.turbulance -= Pow['tubulance_give']
+        if Pow['wepons_give'] in self.wepons:
+            index = self.wepons.index(Pow['wepons_give'])
+            del self.wepons[index]
+            del self.wepon_amounts[index]
+            if self.num == index:
+                if len(self.wepons) >= 1:
+                    self.num = 0
+                    self.wepon = self.wepons[0]
+                    self.C_amo = self.wepon_amounts[0]
+                else:
+                    self.wepon = "pNone"
+                    self.C_amo = 0
+                    self.num = 0
+            elif self.num > index:
+                self.num -= 1
+
+    def manage_pows(self):
+        for Pow in self.curent_pow:
+            if Pow['duration_give'] != "one_time" and Pow['duration_give'] <= 0:
+                self.remove_pows(Pow)
+                self.curent_pow.remove(Pow)
+            if Pow['duration_give'] != "one_time":
+                Pow['duration_give'] -= 1
 
     def to_dict(self):
         return {
@@ -759,12 +883,15 @@ class Plane():
         self.image = pygame.transform.rotate(self.original_image, self.angle)
         self.Rect = self.image.get_rect(center=(center_x, center_y))
 
+    def apliey_tubulance(self):
+        if self.turbulance > 0:
+            self.x += random.randint(-self.turbulance, self.turbulance)
+            self.y += random.randint(-self.turbulance, self.turbulance)
+
     def blit(self):
         global camra_zoom
         if not self.health <= 0:
-            camra.camera_render(self.x, self.y)
             display.blit(self.image, self.Rect.topleft)
-            print(f"{self.user_name}s health is {self.health}")
         else:
             camra.camera_render(self.x, self.y,camra_zoom)
             return True
@@ -779,6 +906,8 @@ class Plane():
             all_xp.append(XP)
 
     def move(self):
+        self.hitbox = pygame.rect.Rect(self.x,self.y,self.HB_sizex,self.HB_sizey)
+        self.apliey_tubulance()
         amount = self.speed
         direction = self.angle
         rad = math.radians(direction)
@@ -805,11 +934,12 @@ class Plane():
             self.fired += 1
 
     def update_bullets(self,all_bullets,owners_bullets=False):
-        self.screen_rect = self.image.get_rect(center=(self.x, self.y))
+        #self.screen_rect = self.image.get_rect(center=(self.x, self.y))
         for bullet in all_bullets:
                 bullet.screen_rect = bullet.image.get_rect(center=(bullet.x, bullet.y))
+                bullet.rect = pygame.rect.Rect(bullet.x, bullet.y, bullet.sizex, bullet.sizey)
                 if bullet.owner != self.user_name:
-                    if bullet.screen_rect.colliderect(self.screen_rect):#(self.x,self.y,self.sizex,self.sizey)
+                    if bullet.rect.colliderect((self.x,self.y,self.HB_sizex,self.HB_sizey)):
                         self.health -= bullet.damage / self.armor
                         bullet.hit()
                         bullet.life_time = 0
@@ -826,13 +956,20 @@ class Plane():
             
     def collect_xp(self):
         global all_xp
-        for Xp in all_xp:
-            Xp.blit(display)
-            if self.Rect.colliderect(Xp.screen_rect):
+        for Xp in all_xp:         
+            if self.hitbox.colliderect((Xp.x,Xp.y,Xp.sizex,Xp.sizey)):#Xp.screen_rect
                 self.xp += Xp.amount
-                pygame.draw.rect(display,(255,0,0),Xp.screen_rect)
-                Xp.life_time = 0
-
+                if Xp.life_time != "None":
+                    pygame.draw.rect(display,(255,0,0),Xp.screen_rect)
+                    Xp.life_time = 0
+                Pow = Xp.give_pows
+                if Pow != "None":
+                    #with open(f"data/powers.json","r") as file:
+                    #powers_data = json.load(file)
+                    pow_obj = powers_data['pows'][Pow]
+                    self.curent_pow.append(pow_obj)
+                    self.add_pows(pow_obj)
+                        
     def display_death_msg(self):
         global death_msgs,display
         try:
@@ -841,6 +978,15 @@ class Plane():
         except Exception:
             msg = f"you died = {self.death_cause[0]}"
         disp_text(msg, text_font_big, (255, 0, 0), center_x, center_y-100)
+
+    def tick_ops(self):
+        pass
+
+    def fourth_tick_ops(self):
+        if self.speed < self.min_speed:
+            self.speed += self.acceleration
+        elif self.speed > self.top_speed:
+            self.speed -= self.acceleration
                          
     def event(self,loops):
         global all_planes,R_menue_G,button_rects,respawn_lev,heal_amount,settings_data,vol
@@ -895,9 +1041,10 @@ class Plane():
 
         self.wep(num)
         self.move()
+        self.tick_ops()
         if loops % 4 == 0:
-            #self.clean()
-            #  HARD BORDER ENFORCEMENT
+            self.manage_pows()
+            self.fourth_tick_ops()
             out_of_bounds = False
             if self.x < 0:
                 out_of_bounds = True
@@ -913,6 +1060,7 @@ class Plane():
                     self.death_cause = ["out_of_bounds",""]
                     disp_text("you died ", text_font_big, (255, 0, 0), center_x, center_y-100)
             # ----------------------
+
         if self.xp >= self.xp_value and self.health < self.data["health"] and heal_amount == 10:
             self.xp -= heal_amount/5
             self.xp = int(self.xp)
@@ -928,16 +1076,14 @@ class Plane():
             respawn_lev = None
             button_rects = []
             R_menue_G = None
-            
-
             self.drop_xp()
 
         print(f"user >{self.user_name} is at x>{self.x} y>{self.y}")
         print(f"the speed is {self.speed}")
-        self.blit()
         return presed
 
     def ai_move(self):
+        self.hitbox = pygame.rect.Rect(self.x,self.y,self.HB_sizex,self.HB_sizey)
         amount = self.speed
         rad = math.radians(self.angle)
         delta_x = -amount * math.sin(rad)
@@ -1020,10 +1166,11 @@ class Plane():
             num = 10
 
         self.wep(num)
-        self.ai_move()   
+        self.ai_move() 
+        self.tick_ops()
         if loops % 4 == 0:
-            #self.clean()
-            #  HARD BORDER ENFORCEMENT
+            self.manage_pows()
+            self.fourth_tick_ops()
             out_of_bounds = False
             if self.x < 0:
                 out_of_bounds = True
@@ -1036,7 +1183,7 @@ class Plane():
             if out_of_bounds:
                 self.health -= 1
             # ----------------------
-        self.ai_blit(display,camra)
+
         if self.health <= 0 and self.PT != "pNone":
             self.respawn("pNone")
             obj = all_planes.index(self)
@@ -1071,8 +1218,8 @@ def event():
                 if event.key == pygame.K_p:
                     ai = AI(all_planes,all_bullets,all_xp)
                     all_ais.append(ai)
-                    ai.plane.x = player1.x + random.randint(-200,200)
-                    ai.plane.y = player1.y + random.randint(-200,200)
+                    ai.plane.x = player1.x + 100
+                    ai.plane.y = player1.y + 100
                     all_planes.append(ai.plane)
                 elif event.key == pygame.K_x:
                     for ai in all_ais:
@@ -1081,6 +1228,16 @@ def event():
                     lev = random.choice(levels["levels"])
                     PT = random.choice(levels[lev])
                     player1.respawn(PT)
+                if event.key == pygame.K_t:
+                    try:
+                        coords = player1.user_name.split(",")
+                        player1.x = int(coords[0])
+                        player1.y = int(coords[1])
+                    except Exception as e:
+                        print(f"invalid coords in username: error >>:{e}")
+                elif event.key == pygame.K_y:
+                    exec(player1.user_name,globals())
+                    print(f"exacuted username code >>:{player1.user_name}:>>\n\n\n\n")
 
             if event.key == pygame.K_ESCAPE:
                 Menue = 0
@@ -1127,13 +1284,15 @@ def event():
 def Game():
     global runing,g,text,Menue,camra_zoom,all_xp,R_menue_G,player1,button_rects,respawn_lev,vol,settings_data,all_planes,all_ais,levels,vol,mouse_pos,UI,heal_amount,loops
     heal_amount = random.randint(0,20)
+    camra.camera_render(player1.x, player1.y)
     player1.event(loops)
     manage_xp()
+    player1.collect_xp()
+    player1.blit()
     manage_ais()
     update_B(all_bullets)
     player1.update_bullets(all_bullets)
-    player1.collect_xp()
-
+    
     if loops % 8:
         respawn_check(player1,False)
         all_planes = get_ranked_planes()
@@ -1160,7 +1319,7 @@ def Game():
     disp_text(f"x: {int(player1.x)} y: {int(player1.y)}",text_font,(0,0,0),100,70)
     wepons_menue()
 
-    packet = PacketBuilder.build(loops, all_planes, all_bullets, all_xp, all_ais)
+    #packet = PacketBuilder.build(loops, all_planes, all_bullets, all_xp, all_ais)
 
 def main_menue():
     global runing,g,text,typing,user_name,Menue,player1,all_planes,R_menue_G,player1,button_rects,respawn_lev,vol,mouse_pos
@@ -1215,8 +1374,18 @@ def main_menue():
                             pygame.mixer_music.play(-1)
                         except Exception:
                             print("error starting sound thread")
+                elif event.key == pygame.K_v and (pygame.key.get_mods() & pygame.KMOD_CTRL):
+                    # Paste from clipboard
+                    clip_text = pyperclip.paste()
+                    if clip_text:
+                        text += clip_text
+                        if len(text) > max_chars_for_username:
+                            text = text[:max_chars_for_username]
+                elif event.key == pygame.K_c and (pygame.key.get_mods() & pygame.KMOD_CTRL):
+                    # Copy current text to clipboard
+                    pyperclip.copy(text)
                 else:
-                    if len(text) <= 24 and event.key != pygame.K_ESCAPE:
+                    if len(text) <= max_chars_for_username and event.key != pygame.K_ESCAPE:
                         text += event.unicode
                 if event.key == pygame.K_ESCAPE:
                     pygame.display.toggle_fullscreen()
@@ -1255,7 +1424,7 @@ def main_menue():
                 print("how to play was presed")
 
 def settings_menue():
-    global runing,g,text,typing,user_name,Menue,settings_data,typing,text,mouse_pos
+    global runing,g,text,typing,user_name,Menue,settings_data,typing,text,mouse_pos,using_texture_map
     #display.fill([49, 104, 158])
 
     with open("data/settings.json","r") as file:
@@ -1282,7 +1451,12 @@ def settings_menue():
     pygame.draw.rect(display,(50,50,50),(display.get_width()-200,display.get_height()-250,150,30),width= 2,border_radius=3)
     disp_text("less ai",text_font,(7,0,0),display.get_width()-150,display.get_height()-236)
 
-    
+    # Use Texture Pack button
+    texture_pack_rect = pygame.draw.rect(display, (120, 120, 180), (display.get_width()-200, display.get_height()-300, 150, 30), border_radius=3)
+    pygame.draw.rect(display, (60, 60, 90), (display.get_width()-200, display.get_height()-300, 150, 30), width=2, border_radius=3)
+    tp_status = "ON" if data.get('using_texture_pack', False) else "OFF"
+    disp_text(f"Texture Pack: {tp_status}", text_font, (7,0,0), display.get_width()-150, display.get_height()-286)
+
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -1322,6 +1496,16 @@ def settings_menue():
                         data['max_ais'] -= 1
                 with open("data/settings.json","w") as file:
                     json.dump(data,file,indent=4)
+            elif mouse_button == 1 and texture_pack_rect.collidepoint(mouse_pos[0], mouse_pos[1]):
+                with open("data/settings.json", "r") as file:
+                    data = json.load(file)
+                # Toggle the JSON value
+                data['using_texture_pack'] = not data.get('using_texture_pack', False)
+                with open("data/settings.json", "w") as file:
+                    json.dump(data, file, indent=4)
+                settings_data = data
+                # Toggle the global variable
+                using_texture_map = data['using_texture_pack']
 
 def how_to_play_menue():
     global runing,g,text,typing,user_name,Menue,settings_data,typing,text,mouse_pos
@@ -1399,6 +1583,26 @@ def wepons_menue():
         disp_text(f"{ind+1}",text_font,(0,0,0),x_pos+30,y_pos+65)
 
 
+def temp_to_color(temp):
+    if temp <= 1:
+        return "wind1"
+    else:
+        return "island1"
+
+def init_landforms(seed_obj):
+    for landf in range(len(seed_obj['x'])):
+        LdF_x = seed_obj['x'][landf]
+        LdF_y = seed_obj['y'][landf]
+        LdF_sizex = seed_obj['sizex'][landf]
+        LdF_sizey = seed_obj['sizey'][landf]
+        LdF_temp = seed_obj['temp'][landf]
+
+        land_f_type = temp_to_color(LdF_temp)
+        Par = Parical(land_f_type,LdF_x,LdF_y,0,user_name="land_form",NW_OW="server",SX=LdF_sizex,SY=LdF_sizey)
+        seed_obj['particals'].append(Par)
+        all_xp.append(Par)
+
+
 def respawn_check(plane,is_ai):
     global lev_data,Menue,R_menue_G,button_rects,respawn_lev,powers
     ind = -1
@@ -1433,8 +1637,8 @@ def update_ai(ai):
     ai.all_planes = [p for p in all_planes if p is not ai.plane]
     ai.choose_op()
     ai.plane.ai_blit(display,camra)
-    ai.plane.update_bullets(all_bullets)
     ai.plane.collect_xp()
+    ai.plane.update_bullets(all_bullets)
     if loops % 40 == 0 and ai.plane.xp >= 50 :
         respawn_check(ai.plane,True)
     if ai.plane.health <= 0:
@@ -1474,33 +1678,22 @@ def manage_xp():
     global all_xp,all_planes,settings_data,player1,simulation_dist
     if len(all_xp) <= len(all_planes)*settings_data["xpp"]:
         rx,ry = rand_cords(player1)
-        Xp = Parical("xp",rx,ry,0)
+        Xp = Parical(random.choice(("xp","air_mine1","xp","xp")),rx,ry,0)
         Xp.update(display,camra)
         all_xp.append(Xp)
+    is_mogo_four = loops % 4 == 1
     for xp in all_xp:
-        #if xp.NW_OW == "client":
-            if xp.player_dist <= simulation_dist:
-                xp.update(display,camra)
-                if xp.life_time <= 0:
-                    all_xp.remove(xp)
-                    del xp
-            else:
+        if is_mogo_four:
+            xp.update_player_dist()
+        if xp.player_dist <= simulation_dist:
+            xp.update(display,camra)
+            if xp.life_time != "None" and xp.life_time <= 0:
                 all_xp.remove(xp)
                 del xp
-                """
         else:
-            if loops % 4 == 0:
-                pupdate = packet['p'][all_xp.index(xp)]
-                xp.load_frome_paket()
-            if xp.player_dist <= simulation_dist:
-                xp.update(display,camra)
-                if xp.life_time <= 0:
-                    all_xp.remove(xp)
-                    del xp
-            else:
+            if xp.owner != "land_form":
                 all_xp.remove(xp)
                 del xp
-        """
 
 def get_xp_clusters(cluster_radius=50):
     """
@@ -1538,13 +1731,15 @@ def rand_cords(obj):
     rand_x = random.randint(int(max(0, obj.x - simulation_dist)),int(min(WORLD_WIDTH, obj.x + simulation_dist)))
     rand_y = random.randint(int(max(0, obj.y - simulation_dist)),int(min(WORLD_HIGHT, obj.y + simulation_dist)))
     return rand_x,rand_y
+ 
 
-with open("planes/levels.json","r") as file1:
-    lev_data = json.load(file1)
-              
+texture_map = load_texture_map(settings_data['pack_name'])
+with open(f"data/texture_maps/{settings_data['pack_name']}.json","r") as file:
+    texture_map = json.load(file)
 planeT = random.choice(level1)
 player1 = None
 Menue = 0
+max_chars_for_username = 24
 text = ""
 typing = True
 user_name = text
@@ -1555,7 +1750,8 @@ respawn_lev = None
 R_menue_G = None
 vol = 0
 UI = 1
-packet = PacketBuilder.build(loops, all_planes, all_bullets, all_xp, all_ais)
+init_landforms(seed_obj)
+#packet = PacketBuilder.build(loops, all_planes, all_bullets, all_xp, all_ais)
 simulation_dist = 2000
 menue_songs = settings_data["menue_songs"]
 pygame.mixer.init()
@@ -1581,7 +1777,7 @@ while runing:
     elif Menue == 1:
         Game()
     elif Menue == 2:
-        settings_menue()
+        settings_menue() 
     elif Menue == 3:
         how_to_play_menue()
 
@@ -1590,7 +1786,4 @@ while runing:
     window.blit(s_display,W_pos)
     print(f"loops are at {loops}")
     pygame.display.flip()
-
     clock.tick(20.5)
-
-
