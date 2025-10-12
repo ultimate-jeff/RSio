@@ -2,7 +2,7 @@
   "amount": 0,
   "sizex": 40,
   "sizey": 50,
-  "life_time": 800,
+  "life_time": 300,
   "hit_sound": "707db471-c834-494e-a3d9-ada985203ef6",
   "give_pows": "get_blownup",
   "imortal": false

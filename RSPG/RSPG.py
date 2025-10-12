@@ -1,6 +1,7 @@
 
 import sys
 import math
+from threading import Thread
 import pygame
 import random
 import time
@@ -36,6 +37,8 @@ with open("planes/levels.json","r") as file1:
     lev_data = json.load(file1)
 with open("data/pre_loded_textures.json","r") as file:
     texture_map = json.load(file)
+with open("data/ai_names.json","r") as file:
+    plane_names = json.load(file)
 
 
 pygame.init()
@@ -371,8 +374,6 @@ class AI():
     def __init__(self,all_planes,all_bullets,all_xp,NW_OW="server"):
         global player1
         self.NW_OW = NW_OW
-        with open("data/ai_names.json","r") as file:
-            plane_names = json.load(file)
         self.all_xp = all_xp
         self.all_planes = all_planes
         self.plane = Plane(random.choice(plane_names['names']),random.choice(level1),NW_OW=NW_OW)
@@ -1661,6 +1662,8 @@ def update_B(all_B):
         else:
             bullet.life_time -= 3
 
+
+all_threads = []
 def manage_ais():
     global all_ais,all_bullets,all_planes,loops,all_xp,settings_data,simulation_dist,player1
     if len(all_ais) <= settings_data['max_ais']:
@@ -1671,6 +1674,9 @@ def manage_ais():
     if all_ais != []:
         for ai in all_ais:
             if ai.player_dist <= simulation_dist:
+                #thread = Thread(update_ai(ai),args=ai)
+                #thread.start()
+                #all_threads.append(thread)
                 update_ai(ai)
             else:
                 ai.un_loaded_ticks += 1
@@ -1678,6 +1684,12 @@ def manage_ais():
                     del ai.plane
                     all_ais.remove(ai)
                     del ai
+        #for thread in all_threads:
+         #   thread.join()
+          #  all_threads.remove(thread)
+
+
+
 
 def manage_xp():
     global all_xp,all_planes,settings_data,player1,simulation_dist
@@ -1753,7 +1765,6 @@ R_menue_G = None
 vol = 0
 UI = 1
 init_landforms(seed_obj)
-#packet = PacketBuilder.build(loops, all_planes, all_bullets, all_xp, all_ais)
 simulation_dist = 2000
 menue_songs = settings_data["menue_songs"]
 pygame.mixer.init()
@@ -1787,5 +1798,6 @@ while runing:
     s_display = pygame.transform.smoothscale(display, new_size)
     window.blit(s_display,W_pos)
     print(f"loops are at {loops}")
+    print(f"{prin_GREEN} the fps is {clock.get_fps()}{prin_RESET}")
     pygame.display.flip()
     clock.tick(20.5)
