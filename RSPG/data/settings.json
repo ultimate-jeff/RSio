@@ -1,7 +1,7 @@
 {
     "test": 0,
     "using_texture_pack": true,
-    "pack_name": "texture_map1",
+    "pack_name": "holoween_pack",
     "dev_ops": 1,
     "ticks_ai_can_be_unloaded": 15,
     "death_songs": [

@@ -1,5 +1,4 @@
 
-from encodings.punycode import T
 import sys
 import math
 import pygame
@@ -20,7 +19,7 @@ print(f"{prin_RED}This text is red.{prin_RESET}")
 print(f"{prin_GREEN}This text is green.{prin_RESET}")
 print(f"{prin_BLUE}This text is blue.{prin_RESET} And this is normal again.")
 """
-
+texture_map = {}
 with open("planes/levels.json","r") as file:
     levels = json.load(file)
 level1 = levels["level1"]
@@ -35,8 +34,9 @@ with open("data/powers.json","r") as file:
     powers_data = json.load(file)
 with open("planes/levels.json","r") as file1:
     lev_data = json.load(file1)
+with open("data/pre_loded_textures.json","r") as file:
+    texture_map = json.load(file)
 
-texture_map = {}
 
 pygame.init()
 runing = True
@@ -93,6 +93,7 @@ seed_obj = {
     "particals" : []
 }
 
+
 def color_swap(surface: pygame.Surface, old_color: tuple, new_color: tuple) -> pygame.Surface:
     arr_rgb = pygame.surfarray.array3d(surface)
     arr_alpha = pygame.surfarray.array_alpha(surface)
@@ -108,6 +109,7 @@ def load_texture_map(map_name):
     global texture_map
     with open(f"data/texture_maps/{map_name}.json","r") as file:
         texture_map = json.load(file)
+    init_comon_textures()
 
 def loading_scren1():
     display.fill((49, 104, 158))
@@ -225,6 +227,23 @@ comon_textures["death_xp"] = CT_img
 text_font = pygame.font.SysFont("Arial", 20)
 text_font_big = pygame.font.SysFont("Arial", 50)
 
+def init_comon_textures():
+    global texture_map
+    all_keys = texture_map.keys()
+    TM = texture_map
+    for key in all_keys:
+        val = TM[key]
+        if isinstance(val,bool):
+            val = pygame.image.load(key).convert_alpha()
+            TM[key] = val
+        elif isinstance(val,str):
+            val = pygame.image.load(val).convert_alpha()
+            TM[key] = val
+        else:
+            val = pygame.image.load(key).convert_alpha()
+            TM[key] = val
+    texture_map = TM
+
 def disp_text(text, font, color, x, y):
     img = font.render(text, True, color)
     rect = img.get_rect(center=(x, y))
@@ -237,25 +256,10 @@ def play_sound(file_path, volume=0.5):
     pygame.mixer_music.play(-1)
 
 def load_image(path,using_TP=False,TP_data=None):
-    if using_TP and TP_data != None:
-        try:
-            new_path = TP_data[path]
-        except Exception:
-            print(f"{prin_RED} !* faild to find {path} in the texture map json {prin_RESET}")
-            new_path=False 
-        if new_path == False:
-            return pygame.image.load(path).convert_alpha()
-        else:
-            try:
-                print("\033[94mloaded texture from texturemap\033[0m")
-                return pygame.image.load(new_path).convert_alpha()
-            except FileNotFoundError:
-                print(f"\033[91m !* file {new_path} not found going to defalt \033[0m")
-                return pygame.image.load(path).convert_alpha()
-    else:
-        return pygame.image.load(path).convert_alpha()
+    return texture_map[path]
 
 # init game_data
+init_comon_textures()
 menue_buttone_data = game_data['buttons']
 for button in menue_buttone_data:
     bimg = pygame.image.load(button['image_path']).convert_alpha()
@@ -1501,6 +1505,7 @@ def settings_menue():
                     data = json.load(file)
                 # Toggle the JSON value
                 data['using_texture_pack'] = not data.get('using_texture_pack', False)
+                load_texture_map(settings_data["pack_name"])
                 with open("data/settings.json", "w") as file:
                     json.dump(data, file, indent=4)
                 settings_data = data
@@ -1733,9 +1738,6 @@ def rand_cords(obj):
     return rand_x,rand_y
  
 
-texture_map = load_texture_map(settings_data['pack_name'])
-with open(f"data/texture_maps/{settings_data['pack_name']}.json","r") as file:
-    texture_map = json.load(file)
 planeT = random.choice(level1)
 player1 = None
 Menue = 0
