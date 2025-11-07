@@ -1,4 +1,5 @@
 
+from functools import partial
 import sys
 import math
 import pygame
@@ -625,7 +626,11 @@ class AI():
             if T == "point":
                 frontBack, leftRite, spaceShif, num_k = self.goto_T(self.target.x,self.target.y)
             elif T == "plane":
-                frontBack, leftRite, spaceShif, num_k = self.attack(self.target)
+                if self.target.value <= self.value_threashold:
+                    frontBack, leftRite, spaceShif, num_k = self.attack(self.target)
+                else:
+                    frontBack = 1
+                    leftRite = self.run(self.target)
             elif T == "partical":
                 self.goto_T(self.target.x,self.target.y)
             else:
@@ -667,11 +672,17 @@ class AI():
         self.plane.ai_event(Loops,frontBack, leftRite, spaceShif, num_k)
 
 class Parical():
-    def __init__(self,WT,x,y,direction,user_name=None,NW_OW="server",SX=None,SY=None):
+    def __init__(self,WT,x,y,direction=0,speed=0,acselaration=0.5,user_name=None,NW_OW="server",SX=None,SY=None):
         self.NW_OW = NW_OW
         self.WT = WT
         self.x = x
         self.y = y
+        self.speed = speed
+        self.angle = direction
+        self.acselaration = acselaration
+        rad = math.radians(direction)
+        self.dx = -self.speed * math.sin(rad)
+        self.dy = -self.speed * math.cos(rad)
         with open(f"Paricals/stats/{WT}.json") as file:
             data = json.load(file)
         self.data = data
@@ -693,6 +704,18 @@ class Parical():
         self.owner = user_name
         self.screen_rect = self.rect
         self.player_dist = 0
+
+    def re_couculate_dx_dy(self):
+        if self.speed > 0:
+            self.speed -= self.acselaration
+            rad = math.radians(self.angle)
+            self.dx = -self.speed * math.sin(rad)
+            self.dy = -self.speed * math.cos(rad)
+        elif self.speed < 0:
+            self.speed += self.acselaration
+            rad = math.radians(self.angle)
+            self.dx = -self.speed * math.sin(rad)
+            self.dy = -self.speed * math.cos(rad)
 
     def to_dict(self):
         return {
@@ -732,8 +755,11 @@ class Parical():
         dy = self.y - player1.y
         self.player_dist = math.hypot(dx, dy)
         
-
     def update(self, display_surface, camera_obj):
+        self.x += self.dx
+        self.y += self.dy
+        if self.speed != 0:
+            self.re_couculate_dx_dy()
         if self.life_time != "None":
             self.life_time -= 1
         self.screen_rect = self.current_scaled_image.get_rect(center=((self.x+ camra.offset_x), (self.y+ camra.offset_y)))
@@ -1026,8 +1052,8 @@ class Plane():
 
     def drop_xp(self):
         global all_xp
-        for i in range(int((self.xp_value/settings_data['death_xp_amount']) + (self.xp/settings_data['death_xp_amount'])/8 )):
-            XP = Parical("death_xp",self.x+random.randint(0,self.sizex),self.y+random.randint(0,self.sizey),0,self.user_name)
+        for i in range(self.data["death_xp_amount"]):
+            XP = Parical(random.choice(self.data["death_xp"]),self.x+random.randint(0,self.sizex),self.y+random.randint(0,self.sizey),direction=random.randint(0,360),speed=self.data["death_xp_speed"],user_name=self.user_name,acselaration=self.data["death_xp_accselaration"])
             XP.update(display,camra)
             all_xp.append(XP)
 
@@ -1338,7 +1364,7 @@ def event():
                 if event.key == pygame.K_f:
                     player1.speed += 50
                 if event.key == pygame.K_k:
-                    Xp = Parical("xp",player1.x+100,player1.y+100,0)
+                    Xp = Parical("xp",player1.x+100,player1.y+100,direction=random.randint(0,360),speed=5)
                     Xp.update(display,camra)
                     all_xp.append(Xp)
                 if event.key == pygame.K_p:
@@ -1459,7 +1485,7 @@ def main_menue():
     pygame.draw.rect(display,(100,100,100,100),(center_x-200,center_y-50,400,50),border_radius=20)
     pygame.draw.rect(display,(50,50,50,0),(center_x-200,center_y-50,400,50),width= 4,border_radius=15)
     disp_text(DT,pygame.font.SysFont("Arial", 25),(80,80,80),center_x,center_y-25)
-    img = pygame.image.load("pt-17.png")
+    img = load_image("pt-17.png")
     img = pygame.transform.scale(img,(40,40))
     img = pygame.transform.rotate(img, -45)
     display.blit(img,(center_x-220,center_y-80))
@@ -1814,10 +1840,10 @@ def manage_ais():
 
 
 def manage_xp():
-    global all_xp,all_planes,settings_data,player1,simulation_dist
+    global all_xp,settings_data,player1,simulation_dist
     if len(all_xp) <= len(all_planes)*settings_data["xpp"]:
         rx,ry = rand_cords(player1)
-        Xp = Parical(random.choice(("xp","air_mine1","xp","xp")),rx,ry,0)
+        Xp = Parical(random.choice(("xp","air_mine1","xp","xp")),rx,ry,direction=random.randint(0,360),speed=6)
         Xp.update(display,camra)
         all_xp.append(Xp)
     is_mogo_four = loops % 4 == 1
@@ -1833,33 +1859,6 @@ def manage_xp():
             if xp.owner != "land_form":
                 all_xp.remove(xp)
                 del xp
-
-def get_xp_clusters(cluster_radius=50):
-    """
-    Returns a list of (x, y) tuples representing the center of each XP cluster.
-    """
-    clusters = []
-    visited = set()
-
-    def distance(a, b):
-        return math.hypot(a.x - b.x, a.y - b.y)
-
-    for i, xp in enumerate(all_xp):
-        if i in visited:
-            continue
-        cluster = [xp]
-        visited.add(i)
-        for j, other_xp in enumerate(all_xp):
-            if j not in visited and distance(xp, other_xp) <= cluster_radius:
-                cluster.append(other_xp)
-                visited.add(j)
-
-        # Calculate cluster center
-        avg_x = sum(item.x for item in cluster) / len(cluster)
-        avg_y = sum(item.y for item in cluster) / len(cluster)
-        clusters.append((avg_x, avg_y))
-
-    return clusters
 
 def get_ranked_planes():
     global all_planes

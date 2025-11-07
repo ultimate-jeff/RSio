@@ -15,5 +15,9 @@
   "wepon_amounts": [ 18 ],
   "xp_value": 5,
   "leval": 4,
-  "plane_value": 0.5
+  "plane_value": 0.5,
+  "death_xp": [ "death_xp" ],
+  "death_xp_amount": 3,
+  "death_xp_speed": 5,
+  "death_xp_accselaration": 0.5
 }

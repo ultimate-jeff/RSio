@@ -518,7 +518,7 @@ class Plane(pygame.sprite.Sprite):
     def drop_xp(self):
         global all_xp
         for i in range(0,int(self.xp_value/10)):
-            XP = Parical("death_xp",self.x+random.randint(0,self.sizex),self.y+random.randint(0,self.sizey),0,self.user_name)
+            XP = Parical("death_xp",self.x+random.randint(0,self.sizex),self.y+random.randint(0,self.sizey),dire)
             XP.update(display,camra)
             all_xp.append(XP)
 

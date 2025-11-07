@@ -1,4 +1,5 @@
 
+from functools import partial
 import sys
 import math
 import pygame
@@ -307,14 +308,21 @@ class AI():
         all_planes.append(self.plane)
         self.all_planes.remove(self.plane)
         self.confidance = 0
+
         self.rand1 = random.randint(0,100) / 100 
         self.rand2 = random.randint(0,100) / 100
         self.agression = random.randint(0,100) / 100
         self.deg_varabilaty = random.randint(-4,4)
         self.value_threashold = random.randint(0,100) / 100
-        self.tick_interval = random.randint(0,4)
-        self.vew_dist = random.randint(400,850)
+        self.tick_interval = random.randint(0,1000)
+        self.vew_dist = random.randint(600,850)
         self.clustering_threshold = random.randint(2,4)
+        self.comp_biost = random.random()
+        self.fireAngleDif = random.randint(3,16)
+        self.fireDist = random.randint(450,700)
+        self.prefWepon = random.randint(0,8)
+        self.simulated_projection = random.uniform(1, 20)
+
         self.un_loaded_ticks = 0
         self.player_dist = 0
         self.bin = {}
@@ -339,7 +347,6 @@ class AI():
         dist = math.hypot(dx, dy)
         angle = (math.degrees(math.atan2(dy, dx)) + 180) % 360
         return angle,dist
-
 
     # this stuff is for point creation
     def init_bin(self,deg_interval):
@@ -492,21 +499,11 @@ class AI():
             return -1.0
 
     def whay_ops(self,obj):
-        #try if statments so detect if plane or partical or point
-        try:
-            return self.whay_plane(self.plane,obj)
-        except Exception:
-            try:
-                obj.WT
-                pows = obj.give_pows
-                simulated_self_plane = copy.deepcopy(self.plane)
-                simulated_self_plane.add_pows(pows)
-                return self.whay_plane_with_pows(simulated_self_plane,self.plane)
-            except Exception:
-                try:
-                    return obj.value
-                except Exception:
-                    return 0.0
+        choice = 0
+        if obj != None:
+            v_dif = (self.plane.value - obj.value) * self.comp_biost
+            return v_dif
+        return 0
 
     def get_target(self,all_objs):
         c_dist = 99999999
@@ -524,8 +521,8 @@ class AI():
 
     def goto_T(self, Tx,Ty):
         frontBack, leftRite, spaceShif, num_k = 0, 0, 0, 0
-        dx = Tx - self.plane.x
-        dy = Ty - self.plane.y
+        dx = (Tx - self.plane.x) * self.simulated_projection
+        dy = (Ty - self.plane.y) * self.simulated_projection
         distance = math.hypot(dx, dy)
         angle_to_target = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
 
@@ -533,16 +530,16 @@ class AI():
         if angle_diff > 180:
             angle_diff -= 360 
 
-        if angle_diff > 10:
+        if angle_diff > self.fireAngleDif:
             leftRite = 1 
-        elif angle_diff < -10:
+        elif angle_diff < -self.fireAngleDif:
             leftRite = 2  
         else:
             leftRite = 0
 
-        if distance > 300:
+        if distance > (self.vew_dist/2.66):
             frontBack = 1  
-        elif distance < 50:
+        elif distance < (self.vew_dist/16):
             frontBack = 2 
         else:
             frontBack = 0 
@@ -552,8 +549,8 @@ class AI():
         return frontBack, leftRite, spaceShif, num_k
     def attack(self, target):
         # Calculate relative position
-        dx = target.x - self.plane.x
-        dy = target.y - self.plane.y
+        dx = (target.x - self.plane.x) * self.simulated_projection
+        dy = (target.y - self.plane.y) * self.simulated_projection
         distance = math.hypot(dx, dy)
 
         # Angle to the target (in degrees)
@@ -564,33 +561,33 @@ class AI():
 
         speed_diff = self.plane.speed - target.speed
 
-        if angle_diff > 10:
+        if angle_diff > self.fireAngleDif:
             leftRite = 1  # turn right
-        elif angle_diff < -10:
+        elif angle_diff < -self.fireAngleDif:
             leftRite = 2  # turn left
         else:
             leftRite = 0  # aligned enough
 
         # Forward/back decision
-        if distance > 250 and speed_diff < 0:
+        if distance > (self.vew_dist/3.2) and speed_diff < 0:
             frontBack = 1  # go faster to catch up
-        elif distance < 150 and speed_diff > 0:
+        elif distance < (self.vew_dist/5.3) and speed_diff > 0:
             frontBack = 2  # slow down
         else:
             frontBack = 0  # maintain speed
 
-        if abs(angle_diff) < 5 and distance < 300:
+        if abs(angle_diff) < self.fireAngleDif and distance < self.fireDist:
             spaceShif = 1
         else:
             spaceShif = 0
 
-        num_k = 1 if spaceShif == 1 else 0
+        num_k = self.prefWepon
         return frontBack, leftRite, spaceShif, num_k
     def run(self, target_plane):
         leftRite = 0
         angle = self.plane.angle % 360
-        dx = target_plane.x - self.plane.x
-        dy = target_plane.y - self.plane.y
+        dx = (target_plane.x - self.plane.x) * self.simulated_projection
+        dy = (target_plane.y - self.plane.y) * self.simulated_projection
         distance = math.hypot(dx, dy)
         angle = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
 
@@ -600,21 +597,21 @@ class AI():
             angle_diff -= 360 
 
         # Turning decision
-        if angle_diff > 10:
+        if angle_diff > self.fireAngleDif:
             leftRite = 2  
-        elif angle_diff < -10:
+        elif angle_diff < -self.fireAngleDif:
             leftRite = 1  
         else:
             leftRite = 0 
 
         return leftRite
 
-    #=-=-=-=-=- this is ai gen -=-=-=-=-=
+
     def calculate_controls(self):
         frontBack, leftRite, spaceShif, num_k = 0,0,0,0
         T = None
         if self.target == None:
-            self.target = self.find_closest_plane(all_planes,self.vew_dist)
+            self.target = self.find_closest_plane(self.all_planes,self.vew_dist)
         if self.target != None:
             try:
                 p = self.target.PT
@@ -627,13 +624,17 @@ class AI():
                     T = "point"
 
             if T == "point":
-                self.goto_T(self.target.x,self.target.y)
+                frontBack, leftRite, spaceShif, num_k = self.goto_T(self.target.x,self.target.y)
             elif T == "plane":
-                self.attack(self.target)
+                if self.target.value <= self.value_threashold:
+                    frontBack, leftRite, spaceShif, num_k = self.attack(self.target)
+                else:
+                    frontBack = 1
+                    leftRite = self.run(self.target)
             elif T == "partical":
                 self.goto_T(self.target.x,self.target.y)
             else:
-                self.goto_T()
+                frontBack, leftRite, spaceShif, num_k = self.goto_T()
 
 
         return frontBack, leftRite, spaceShif, num_k
@@ -661,9 +662,9 @@ class AI():
         frontBack, leftRite, spaceShif, num_k = self.calculate_controls()
         Loops = loops
         self.tick_ops()
-        if Loops % 8 == self.tick_interval:
+        if Loops % 8 == self.tick_interval % 8:
             self.eight_tick_ops()
-        if Loops % 100 == self.tick_interval:
+        if Loops % 100 == self.tick_interval % 100:
             self.sec_tick_ops()
         if Loops % 1000 == self.tick_interval:
             self.ten_sec_ops()
@@ -671,11 +672,17 @@ class AI():
         self.plane.ai_event(Loops,frontBack, leftRite, spaceShif, num_k)
 
 class Parical():
-    def __init__(self,WT,x,y,direction,user_name=None,NW_OW="server",SX=None,SY=None):
+    def __init__(self,WT,x,y,direction=0,speed=0,acselaration=0.5,user_name=None,NW_OW="server",SX=None,SY=None):
         self.NW_OW = NW_OW
         self.WT = WT
         self.x = x
         self.y = y
+        self.speed = speed
+        self.angle = direction
+        self.acselaration = acselaration
+        rad = math.radians(direction)
+        self.dx = -self.speed * math.sin(rad)
+        self.dy = -self.speed * math.cos(rad)
         with open(f"Paricals/stats/{WT}.json") as file:
             data = json.load(file)
         self.data = data
@@ -697,6 +704,18 @@ class Parical():
         self.owner = user_name
         self.screen_rect = self.rect
         self.player_dist = 0
+
+    def re_couculate_dx_dy(self):
+        if self.speed > 0:
+            self.speed -= self.acselaration
+            rad = math.radians(self.angle)
+            self.dx = -self.speed * math.sin(rad)
+            self.dy = -self.speed * math.cos(rad)
+        elif self.speed < 0:
+            self.speed += self.acselaration
+            rad = math.radians(self.angle)
+            self.dx = -self.speed * math.sin(rad)
+            self.dy = -self.speed * math.cos(rad)
 
     def to_dict(self):
         return {
@@ -736,8 +755,11 @@ class Parical():
         dy = self.y - player1.y
         self.player_dist = math.hypot(dx, dy)
         
-
     def update(self, display_surface, camera_obj):
+        self.x += self.dx
+        self.y += self.dy
+        if self.speed != 0:
+            self.re_couculate_dx_dy()
         if self.life_time != "None":
             self.life_time -= 1
         self.screen_rect = self.current_scaled_image.get_rect(center=((self.x+ camra.offset_x), (self.y+ camra.offset_y)))
@@ -1030,8 +1052,8 @@ class Plane():
 
     def drop_xp(self):
         global all_xp
-        for i in range(int((self.xp_value/settings_data['death_xp_amount']) + (self.xp/settings_data['death_xp_amount'])/8 )):
-            XP = Parical("death_xp",self.x+random.randint(0,self.sizex),self.y+random.randint(0,self.sizey),0,self.user_name)
+        for i in range(self.data["death_xp_amount"]):
+            XP = Parical(random.choice(self.data["death_xp"]),self.x+random.randint(0,self.sizex),self.y+random.randint(0,self.sizey),direction=random.randint(0,360),speed=self.data["death_xp_speed"],user_name=self.user_name,acselaration=self.data["death_xp_accselaration"])
             XP.update(display,camra)
             all_xp.append(XP)
 
@@ -1342,7 +1364,7 @@ def event():
                 if event.key == pygame.K_f:
                     player1.speed += 50
                 if event.key == pygame.K_k:
-                    Xp = Parical("xp",player1.x+100,player1.y+100,0)
+                    Xp = Parical("xp",player1.x+100,player1.y+100,direction=random.randint(0,360),speed=5)
                     Xp.update(display,camra)
                     all_xp.append(Xp)
                 if event.key == pygame.K_p:
@@ -1463,7 +1485,7 @@ def main_menue():
     pygame.draw.rect(display,(100,100,100,100),(center_x-200,center_y-50,400,50),border_radius=20)
     pygame.draw.rect(display,(50,50,50,0),(center_x-200,center_y-50,400,50),width= 4,border_radius=15)
     disp_text(DT,pygame.font.SysFont("Arial", 25),(80,80,80),center_x,center_y-25)
-    img = pygame.image.load("pt-17.png")
+    img = load_image("pt-17.png")
     img = pygame.transform.scale(img,(40,40))
     img = pygame.transform.rotate(img, -45)
     display.blit(img,(center_x-220,center_y-80))
@@ -1818,10 +1840,10 @@ def manage_ais():
 
 
 def manage_xp():
-    global all_xp,all_planes,settings_data,player1,simulation_dist
+    global all_xp,settings_data,player1,simulation_dist
     if len(all_xp) <= len(all_planes)*settings_data["xpp"]:
         rx,ry = rand_cords(player1)
-        Xp = Parical(random.choice(("xp","air_mine1","xp","xp")),rx,ry,0)
+        Xp = Parical(random.choice(("xp","air_mine1","xp","xp")),rx,ry,direction=random.randint(0,360),speed=6)
         Xp.update(display,camra)
         all_xp.append(Xp)
     is_mogo_four = loops % 4 == 1
