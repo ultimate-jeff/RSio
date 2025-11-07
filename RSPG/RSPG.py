@@ -1,5 +1,6 @@
 
 from functools import partial
+import json.decoder
 import sys
 import math
 import pygame
@@ -22,6 +23,7 @@ print(f"{prin_GREEN}This text is green.{prin_RESET}")
 print(f"{prin_BLUE}This text is blue.{prin_RESET} And this is normal again.")
 """
 texture_map = {}
+file_map = {}
 with open("planes/levels.json","r") as file:
     levels = json.load(file)
 level1 = levels["level1"]
@@ -109,11 +111,60 @@ def color_swap(surface: pygame.Surface, old_color: tuple, new_color: tuple) -> p
     pygame.surfarray.pixels_alpha(new_surface)[:] = arr_alpha
     return new_surface
 
+def init_comon_textures(texture_map):
+    all_keys = texture_map.keys()
+    TM = texture_map
+    for key in all_keys:
+        val = TM[key]
+        if isinstance(val,bool):
+            val = pygame.image.load(key).convert_alpha()
+            TM[key] = val
+        elif isinstance(val,str):
+            val = pygame.image.load(val).convert_alpha()
+            TM[key] = val
+        else:
+            val = pygame.image.load(key).convert_alpha()
+            TM[key] = val
+    texture_map = TM
+    return texture_map
+
+def load_image(path,using_TP=False,TP_data=None):
+    return texture_map[path]
+
+def init_game_files(file_map):
+    all_keys = file_map.keys()
+    TM = file_map
+    for key in all_keys:
+        val = TM[key]
+        if isinstance(val,bool):
+            with open(key,"r") as file:
+                val = json.load(file)
+            TM[key] = val
+        elif isinstance(val,str):
+            with open(key,"r") as file:
+                val = json.load(file)
+            TM[key] = val
+        else:
+            with open(key,"r") as file:
+                val = json.load(file)
+            TM[key] = val
+    file_map = TM
+    return file_map
+
 def load_texture_map(map_name):
     global texture_map
     with open(f"data/texture_maps/{map_name}.json","r") as file:
         texture_map = json.load(file)
-    init_comon_textures()
+    texture_map = init_comon_textures(texture_map)
+
+def load_file_map(map_name):
+    global file_map
+    with open(f"data/GFmaps/{map_name}.json","r") as file:
+        file_map = json.load(file)
+    file_map = init_game_files(file_map)
+
+def load_file(file_path):
+    return file_map[file_path]
 
 def loading_scren1():
     display.fill((49, 104, 158))
@@ -192,7 +243,7 @@ class GameCamera:
                 screen_y = cy * CHUNK_SIZE * z + self.offset_y
                 self.display_surface.blit(surf, (screen_x, screen_y))
 
-
+load_file_map("Main")
 loops = 0
 using_texture_map = settings_data['using_texture_pack']
 window = pygame.display.set_mode((1500,750))
@@ -232,23 +283,6 @@ dangerous_particals = ["mine1"]
 text_font = pygame.font.SysFont("Arial", 20)
 text_font_big = pygame.font.SysFont("Arial", 50)
 
-def init_comon_textures():
-    global texture_map
-    all_keys = texture_map.keys()
-    TM = texture_map
-    for key in all_keys:
-        val = TM[key]
-        if isinstance(val,bool):
-            val = pygame.image.load(key).convert_alpha()
-            TM[key] = val
-        elif isinstance(val,str):
-            val = pygame.image.load(val).convert_alpha()
-            TM[key] = val
-        else:
-            val = pygame.image.load(key).convert_alpha()
-            TM[key] = val
-    texture_map = TM
-
 def disp_text(text, font, color, x, y):
     img = font.render(text, True, color)
     rect = img.get_rect(center=(x, y))
@@ -260,11 +294,8 @@ def play_sound(file_path, volume=0.5):
     pygame.mixer_music.set_volume(vol + 0.5)
     pygame.mixer_music.play(-1)
 
-def load_image(path,using_TP=False,TP_data=None):
-    return texture_map[path]
-
 # init game_data
-init_comon_textures()
+#init_comon_textures()
 menue_buttone_data = game_data['buttons']
 for button in menue_buttone_data:
     bimg = pygame.image.load(button['image_path']).convert_alpha()
@@ -683,8 +714,7 @@ class Parical():
         rad = math.radians(direction)
         self.dx = -self.speed * math.sin(rad)
         self.dy = -self.speed * math.cos(rad)
-        with open(f"Paricals/stats/{WT}.json") as file:
-            data = json.load(file)
+        data = load_file(f"Paricals/stats/{WT}.json")
         self.data = data
         self.give_pows = data['give_pows']
         self.amount = data['amount']
@@ -693,7 +723,7 @@ class Parical():
         self.life_time = data['life_time']
         self.imortal = data['imortal']
         self.value = data['particle_value']
-        if SX != None:
+        if SX != None and SY != None:
             self.sizex = SX
             self.sizey = SY
         self.original_image = load_image(f"Paricals/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
@@ -716,6 +746,8 @@ class Parical():
             rad = math.radians(self.angle)
             self.dx = -self.speed * math.sin(rad)
             self.dy = -self.speed * math.cos(rad)
+        if abs(self.speed) < self.acselaration:
+            self.speed = 0
 
     def to_dict(self):
         return {
@@ -773,8 +805,7 @@ class Wepons():
         self.x = x
         self.y = y
         self.angle = direction
-        with open(f"wepons/wepon_stats/{WT}.json") as file:
-            data = json.load(file)
+        data = load_file(f"wepons/wepon_stats/{WT}.json")
         self.data = data
         self.speed = data['speed']
         self.damage = data['damage']
@@ -885,11 +916,10 @@ class Plane():
         self.y = random.randint(100,WORLD_HIGHT-100)
         self.PT = PT
         try:
-            with open(f"planes/stats/{PT}.json") as file:
-                data = json.load(file)
+            data = load_file(f"planes/stats/{PT}.json")
         except Exception:
-            with open(f"planes/stats/{PT}.json") as file:
-                data = json.load(file)
+            print(f"could not load planes/stats/{PT}.json")
+            sys.exit()
         self.data = data
         self.acceleration = data['acceleration']
         self.armor = data['armor']
@@ -929,8 +959,7 @@ class Plane():
     def respawn(self,PT,op_data=None):
         self.PT = PT
         if op_data == None:
-            with open(f"planes/stats/{PT}.json") as file:
-                data = json.load(file)
+            data = load_file(f"planes/stats/{PT}.json")
         else:
             data = op_data
         self.acceleration = data['acceleration']
@@ -1881,13 +1910,13 @@ max_chars_for_username = 24
 text = ""
 typing = True
 user_name = text
-all_ais,all_planes,all_bullets,all_xp,powers,xp_cluster,button_rects = [],[],[],[],[],[],[]
-ai_count = 0
+all_ais,all_planes,all_bullets,all_xp,powers,button_rects = [],[],[],[],[],[]
 camra_zoom = 1
 respawn_lev = None
 R_menue_G = None
 vol = 0
 UI = 1
+Tfps = 20.5
 init_landforms(seed_obj)
 simulation_dist = 2000
 menue_songs = settings_data["menue_songs"]
@@ -1922,6 +1951,5 @@ while runing:
     s_display = pygame.transform.smoothscale(display, new_size)
     window.blit(s_display,W_pos)
     print(f"loops are at {loops}")
-    #print(f"{prin_GREEN} the fps is {clock.get_fps()}{prin_RESET}")
     pygame.display.flip()
-    clock.tick(20.5)
+    clock.tick(Tfps)
