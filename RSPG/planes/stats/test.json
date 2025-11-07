@@ -14,5 +14,6 @@
   "wepons": [ "bullet" ],
   "wepon_amounts": [ 3 ],
   "xp_value": 8,
-  "leval": 0
+  "leval": 0,
+  "plane_value": 0.5
 }

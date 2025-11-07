@@ -12,7 +12,8 @@
   "min_speed": 2,
   "turn_speed": 5,
   "wepons": [ "bullet", "fast_bullet" ],
-  "wepon_amounts": [ 10,3],
+  "wepon_amounts": [ 10, 3 ],
   "xp_value": 20,
-  "leval": 3
+  "leval": 3,
+  "plane_value": 0.5
 }

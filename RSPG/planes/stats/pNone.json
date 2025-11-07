@@ -14,5 +14,6 @@
   "wepons": [],
   "wepon_amounts": [],
   "xp_value": 0,
-  "leval": 0
+  "leval": 0,
+  "plane_value": 0.0
 }

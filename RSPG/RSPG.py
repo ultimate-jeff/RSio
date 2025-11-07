@@ -1,7 +1,6 @@
 
 import sys
 import math
-from threading import Thread
 import pygame
 import random
 import time
@@ -9,6 +8,7 @@ import json
 import numpy as np
 import os
 import pyperclip
+import copy
 
 # Define color codes
 prin_RED = '\033[91m'
@@ -227,6 +227,7 @@ comon_textures["death_xp"] = CT_img
 
 #C:\Users\matth\OneDrive\Desktop\333369.png
 #texture_map1.json
+dangerous_particals = ["mine1"]
 text_font = pygame.font.SysFont("Arial", 20)
 text_font_big = pygame.font.SysFont("Arial", 50)
 
@@ -289,6 +290,381 @@ class PacketBuilder:
     def from_json(packet_str):
         return json.loads(packet_str)
 
+class AI_POINT:
+    def __init__(self,x,y,value,og_bin):
+        self.x = x
+        self.y = y
+        self. value = value
+        self.og_bin = og_bin
+
+class AI():
+    def __init__(self,all_planes,all_bullets,all_xp,NW_OW="server"):
+        self.NW_OW = NW_OW
+        self.all_xp = all_xp
+        self.all_planes = all_planes
+        self.plane = Plane(random.choice(plane_names['names']),random.choice(level1),NW_OW=NW_OW)
+        self.target = None
+        all_planes.append(self.plane)
+        self.all_planes.remove(self.plane)
+        self.confidance = 0
+
+        self.rand1 = random.randint(0,100) / 100 
+        self.rand2 = random.randint(0,100) / 100
+        self.agression = random.randint(0,100) / 100
+        self.deg_varabilaty = random.randint(-4,4)
+        self.value_threashold = random.randint(0,100) / 100
+        self.tick_interval = random.randint(0,1000)
+        self.vew_dist = random.randint(600,850)
+        self.clustering_threshold = random.randint(2,4)
+        self.comp_biost = random.random()
+        self.fireAngleDif = random.randint(3,16)
+        self.fireDist = random.randint(450,700)
+        self.prefWepon = random.randint(0,8)
+        self.simulated_projection = random.uniform(1, 20)
+
+        self.un_loaded_ticks = 0
+        self.player_dist = 0
+        self.bin = {}
+        self.points = []
+        self.bin_interval = 10
+        self.init_bin(self.bin_interval)
+        self.partical_taeget = None
+        self.sec_tick_ops()
+
+    def to_dict(self):
+        return {
+            "PD": int(self.player_dist),
+            "ULT": int(self.un_loaded_ticks),
+            "r1": self.rand1,
+            "r2": self.rand2,
+            "o": self.NW_OW
+        }
+
+    def get_angle_and_dist(self,x,y):
+        dx = self.plane.x - x
+        dy = self.plane.y - y
+        dist = math.hypot(dx, dy)
+        angle = (math.degrees(math.atan2(dy, dx)) + 180) % 360
+        return angle,dist
+
+    # this stuff is for point creation
+    def init_bin(self,deg_interval):
+        for i in range(360):
+            if i % deg_interval == 0:
+                self.bin[i] = []
+
+    def loade_bin(self ,obj):
+        #this loades the bin with  {
+    # 0:   [ {"angle": 5, "dist": 120"value":0.5,"og_bin":key}, {"angle": 2, "dist": 130, "value":0.5,"og_bin":key})} ],
+    # 10:  [],
+    # 20:  [ {"angle": 22, "dist": 90"value":0.5,"og_bin":key}, {"angle": 19, "dist": 100"value":0.5,"og_bin":key}, {"angle": 23, "dist": 95"value":0.5,"og_bin":key} ],
+    # 30:  [],
+    # 40:  [ {"angle": 39, "dist": 200"value":0.5,"og_bin":key} ],
+    # }
+        for k in self.bin.keys():
+            self.bin[k] = []
+        for p in obj:
+            value = p.value
+            Type = None
+            angle,dist = self.get_angle_and_dist(p.x,p.y)
+            key = int(angle // self.bin_interval) * self.bin_interval
+            try:
+                p.PT
+                Type = "plane"
+            except Exception:
+                Type = "partical"
+            if key in self.bin:
+                self.bin[key].append({"angle": angle, "dist": dist , "value":value,"og_bin":key,"x":p.x,"y":p.y,"type":Type,"obj":p})
+            else:
+                self.bin[key] = [{"angle": angle, "dist": dist, "value":value,"og_bin":key,"x":p.x,"y":p.y,"type":Type,"obj":p}]
+
+    def check_clustering(self):
+        # this will ret clusterd andgles [10,45]
+        clusters = []
+        keys = self.bin.keys()
+        for k in keys:
+            if len(self.bin[k]) >= self.clustering_threshold:
+                clusters.append(k)
+        return clusters
+
+    def get_points_from_cluster_angles(self,cangs):
+        for ang in cangs:
+            avrage_x = 0
+            avrage_y = 0
+            avrage_value = 0
+            B = self.bin[ang]
+            for obj in B:
+                # calculate points which would be {"x":float,"y":float,"value} but for each bi there should only be a max of 1 point
+                rad = math.radians(obj['angle'])
+                px = self.plane.x + obj['dist'] * math.cos(rad)
+                py = self.plane.y + obj['dist'] * math.sin(rad)
+                avrage_x += px
+                avrage_y += py
+                avrage_value += obj['value']
+            avrage_x /= len(B)
+            avrage_y /= len(B)
+            avrage_value /= len(B)
+            point = AI_POINT(avrage_x,avrage_y,avrage_value,obj["og_bin"])
+            self.points.append(point)
+
+    #this stuff deals with target finding and navigation
+    def find_nearest_point(self):
+        closest_dist = self.vew_dist - 1 
+        target_point = None
+        for p in self.points:
+            angle,dist = self.get_angle_and_dist(p.x,p.y)
+            if dist < closest_dist:
+                closest_dist = dist
+                target_point = p
+        return target_point, closest_dist
+
+    def find_nearest_P_and_p(self,b):
+        nearest_plane_dist = self.vew_dist - 1
+        nearest_plane = None
+        nearest_partical_dist = self.vew_dist - 1
+        nearest_partical = None
+        for obj in b:
+            # identify if plane or parical
+            x = obj['x']
+            y = obj['y']
+            Type = obj['type']
+            angle,dist = self.get_angle_and_dist(x,y)
+            if Type == "plane":
+                if dist < nearest_plane_dist:
+                    nearest_plane_dist = dist
+                    nearest_plane = obj['obj']
+            elif Type == "partical":
+                if dist < nearest_partical_dist:
+                    nearest_partical_dist = dist
+                    nearest_partical = obj['obj']
+
+        return nearest_plane, nearest_plane_dist, nearest_partical, nearest_partical_dist
+        
+    def find_closest_plane(self, all_objects, distance):
+        closest = None
+        closest_dist = float('inf')
+        for obj in all_objects:
+            dx = obj.x - self.plane.x
+            dy = obj.y - self.plane.y
+            dist = math.hypot(dx, dy)
+            if dist < closest_dist and dist <= distance:
+              if not obj.PT == "pNone":
+                closest = obj
+                closest_dist = dist
+        return closest
+
+    def get_two_targets(self):
+        targets_point,dist = self.find_nearest_point()
+        if targets_point != None:
+            targets_bin_interval = targets_point.og_bin
+            targets_bin = self.bin[targets_bin_interval]
+            Nplane,NplaneD,Npartical,NparticalD = self.find_nearest_P_and_p(targets_bin)
+            self.target = Nplane
+            self.partical_taeget = Npartical
+
+
+    def update_player_dist(self):
+        global player1
+        dx = self.plane.x - player1.x
+        dy = self.plane.y - player1.y
+        self.player_dist = math.hypot(dx, dy)
+
+    def get_points(self,threashold):
+        self.points = []
+        self.loade_bin(all_xp)
+        self.loade_bin(self.all_planes)
+        c_angs = self.check_clustering()
+        self.get_points_from_cluster_angles(c_angs)
+
+    def whay_plane(self,obj1,obj2):
+        if obj2.PT != "pNone":
+            c_health = obj1.health - obj2.health
+            c_speed = obj1.top_speed - obj2.top_speed
+            c_armor = obj1.armor - obj2.armor
+            c_lev = obj1.curent_leval - obj2.curent_leval
+            c_fire_speed = obj1.fire_speed - obj2.fire_speed
+            c_turn_speed = obj1.turn_speed - obj2.turn_speed
+            c_acceleration = obj1.acceleration - obj2.acceleration
+            c_value = obj1.value - obj2.value
+
+            c_stats = (c_health,c_speed,c_armor,c_lev,c_fire_speed,c_value,c_turn_speed,c_acceleration)
+            score = 0
+            for stat in c_stats:
+                if stat > 0:
+                    score += 1
+            score /= len(c_stats)
+            return score
+        else:
+            return -1.0
+
+    def whay_ops(self,obj):
+        choice = 0
+        if obj != None:
+            v_dif = (self.plane.value - obj.value) * self.comp_biost
+            return v_dif
+        return 0
+
+    def get_target(self,all_objs):
+        c_dist = 99999999
+        closest_to_target_val_obj = None
+        for p in all_objs:
+            val = p.value
+            dist = abs(val - self.agression)
+            if dist < c_dist:
+                c_dist = dist
+                if self.whay_ops(p) > self.value_threashold:
+                    closest_to_target_val_obj = p
+        return closest_to_target_val_obj
+
+        return closest_to_target_val_obj
+
+    def goto_T(self, Tx,Ty):
+        frontBack, leftRite, spaceShif, num_k = 0, 0, 0, 0
+        dx = (Tx - self.plane.x) * self.simulated_projection
+        dy = (Ty - self.plane.y) * self.simulated_projection
+        distance = math.hypot(dx, dy)
+        angle_to_target = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
+
+        angle_diff = (angle_to_target - self.plane.angle + 360) % 360
+        if angle_diff > 180:
+            angle_diff -= 360 
+
+        if angle_diff > self.fireAngleDif:
+            leftRite = 1 
+        elif angle_diff < -self.fireAngleDif:
+            leftRite = 2  
+        else:
+            leftRite = 0
+
+        if distance > (self.vew_dist/2.66):
+            frontBack = 1  
+        elif distance < (self.vew_dist/16):
+            frontBack = 2 
+        else:
+            frontBack = 0 
+        spaceShif = 0
+        num_k = 0
+
+        return frontBack, leftRite, spaceShif, num_k
+    def attack(self, target):
+        # Calculate relative position
+        dx = (target.x - self.plane.x) * self.simulated_projection
+        dy = (target.y - self.plane.y) * self.simulated_projection
+        distance = math.hypot(dx, dy)
+
+        # Angle to the target (in degrees)
+        angle_to_target = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
+        angle_diff = (angle_to_target - self.plane.angle + 360) % 360
+        if angle_diff > 180:
+            angle_diff -= 360  # Convert to range -180 to 180
+
+        speed_diff = self.plane.speed - target.speed
+
+        if angle_diff > self.fireAngleDif:
+            leftRite = 1  # turn right
+        elif angle_diff < -self.fireAngleDif:
+            leftRite = 2  # turn left
+        else:
+            leftRite = 0  # aligned enough
+
+        # Forward/back decision
+        if distance > (self.vew_dist/3.2) and speed_diff < 0:
+            frontBack = 1  # go faster to catch up
+        elif distance < (self.vew_dist/5.3) and speed_diff > 0:
+            frontBack = 2  # slow down
+        else:
+            frontBack = 0  # maintain speed
+
+        if abs(angle_diff) < self.fireAngleDif and distance < self.fireDist:
+            spaceShif = 1
+        else:
+            spaceShif = 0
+
+        num_k = self.prefWepon
+        return frontBack, leftRite, spaceShif, num_k
+    def run(self, target_plane):
+        leftRite = 0
+        angle = self.plane.angle % 360
+        dx = (target_plane.x - self.plane.x) * self.simulated_projection
+        dy = (target_plane.y - self.plane.y) * self.simulated_projection
+        distance = math.hypot(dx, dy)
+        angle = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
+
+        angle_to_target = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
+        angle_diff = (angle_to_target - self.plane.angle + 360) % 360
+        if angle_diff > 180:
+            angle_diff -= 360 
+
+        # Turning decision
+        if angle_diff > self.fireAngleDif:
+            leftRite = 2  
+        elif angle_diff < -self.fireAngleDif:
+            leftRite = 1  
+        else:
+            leftRite = 0 
+
+        return leftRite
+
+
+    def calculate_controls(self):
+        frontBack, leftRite, spaceShif, num_k = 0,0,0,0
+        T = None
+        if self.target == None:
+            self.target = self.find_closest_plane(self.all_planes,self.vew_dist)
+        if self.target != None:
+            try:
+                p = self.target.PT
+                T = "plane"
+            except Exception:
+                try:
+                    p = self.target.WT
+                    T = "partical"
+                except Exception:
+                    T = "point"
+
+            if T == "point":
+                frontBack, leftRite, spaceShif, num_k = self.goto_T(self.target.x,self.target.y)
+            elif T == "plane":
+                frontBack, leftRite, spaceShif, num_k = self.attack(self.target)
+            elif T == "partical":
+                self.goto_T(self.target.x,self.target.y)
+            else:
+                frontBack, leftRite, spaceShif, num_k = self.goto_T()
+
+
+        return frontBack, leftRite, spaceShif, num_k
+
+
+    # master methods for ai operations
+    def tick_ops(self):
+        pass
+
+    def eight_tick_ops(self):
+        self.update_player_dist()
+        #self.target = self.find_target(self.all_planes,self.vew_dist)
+
+    def sec_tick_ops(self):
+        self.get_points(self.value_threashold)
+        self.get_two_targets()
+        self.target = self.get_target(self.points)
+
+    def ten_sec_ops(self):
+        pass
+      
+    #main update method
+    def choose_op(self):
+        frontBack, leftRite, spaceShif, num_k = 0,0,0,0
+        frontBack, leftRite, spaceShif, num_k = self.calculate_controls()
+        Loops = loops
+        self.tick_ops()
+        if Loops % 8 == self.tick_interval % 8:
+            self.eight_tick_ops()
+        if Loops % 100 == self.tick_interval % 100:
+            self.sec_tick_ops()
+        if Loops % 1000 == self.tick_interval:
+            self.ten_sec_ops()
+
+        self.plane.ai_event(Loops,frontBack, leftRite, spaceShif, num_k)
 
 class Parical():
     def __init__(self,WT,x,y,direction,user_name=None,NW_OW="server",SX=None,SY=None):
@@ -305,17 +681,11 @@ class Parical():
         self.sizey = data['sizey']
         self.life_time = data['life_time']
         self.imortal = data['imortal']
+        self.value = data['particle_value']
         if SX != None:
             self.sizex = SX
             self.sizey = SY
-        if not using_texture_map:
-            if (self.WT == "xp" or self.WT == "death_xp"):
-                self.original_image = comon_textures[self.WT]
-            else:
-                self.original_image = load_image(f"Paricals/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
-                #self.original_image = pygame.image.load(f"Paricals/{WT}.png")
-        else:
-            self.original_image = load_image(f"Paricals/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        self.original_image = load_image(f"Paricals/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.rect = self.image.get_rect(center=(500, 350))
@@ -370,238 +740,6 @@ class Parical():
         display_surface.blit(self.current_scaled_image, self.screen_rect)
         return self.screen_rect
 
-class AI():
-    def __init__(self,all_planes,all_bullets,all_xp,NW_OW="server"):
-        global player1
-        self.NW_OW = NW_OW
-        self.all_xp = all_xp
-        self.all_planes = all_planes
-        self.plane = Plane(random.choice(plane_names['names']),random.choice(level1),NW_OW=NW_OW)
-        self.fired = self.plane.fired
-        #self.health = self.plane.health
-        self.target = None
-        all_planes.append(self.plane)
-        self.all_planes.remove(self.plane)
-        self.target = self.find_target(self.all_planes,800)
-        self.confidance = 0
-        self.rand1 = random.randint(-2,30)
-        self.rand2 = random.randint(-32,32)
-        self.un_loaded_ticks = 0
-        self.player_dist = 0
-
-    def to_dict(self):
-        return {
-            "PD": int(self.player_dist),
-            "ULT": int(self.un_loaded_ticks),
-            "r1": self.rand1,
-            "r2": self.rand2,
-            "o": self.NW_OW
-        }
-
-    def update_player_dist(self):
-        global player1
-        dx = self.plane.x - player1.x
-        dy = self.plane.y - player1.y
-        self.player_dist = math.hypot(dx, dy)
-
-    def find_target(self, all_objects, distance):
-        # Only consider planes within a certain distance
-        nearby = [obj for obj in all_objects if math.hypot(obj.x - self.plane.x, obj.y - self.plane.y) <= distance and obj.PT != "pNone"]
-        if not nearby:
-            return None
-        # Find the closest
-        return min(nearby, key=lambda obj: math.hypot(obj.x - self.plane.x, obj.y - self.plane.y))
-
-    def whay_ops(self):
-        if self.target != None:
-            C_health = self.plane.health - self.target.health
-            C_top_speed = self.plane.top_speed - self.target.top_speed
-            C_turn_speed = self.plane.turn_speed - self.target.turn_speed
-            C_fire_speed = self.plane.fire_speed - self.target.fire_speed
-            C_armor = self.plane.armor - self.target.armor
-            C_acceleration = self.plane.acceleration - self.target.acceleration
-            B_health = 1 if C_health >= 0 else 0
-            B_top_speed = 1 if C_top_speed >= 0 else 0
-            B_turn_speed = 1 if C_turn_speed >= 0 else 0
-            B_fire_speed = 1 if C_fire_speed >= 0 else 0
-            B_armor = 1 if C_armor >= 0 else 0
-            B_acceleration = 1 if C_acceleration >= 0 else 0
-            average_score = (B_health + B_top_speed + B_turn_speed +
-                             B_fire_speed + B_armor + B_acceleration) / 6
-            return average_score
-        else:
-            return 0
-
-    def whay_xp(self,dist=300):
-        #auglobal all_xp,xp_cluster,all_planes
-        #conf = len(xp_cluster) / len(all_xp)
-        return 0
-  
-    def find_xp(self):
-        global all_xp,xp_cluster
-        for obj in xp_cluster:
-            dx = obj[0] - self.plane.x
-            dy = obj[1] - self.plane.y
-            dist = math.hypot(dx, dy)
-            try:
-                if dist < closest_dist and dist <= dist:
-                    target,closest = obj,obj
-                    closest_dist = dist
-            except Exception:
-                closest_dist = dist
-                target = obj
-                # Calculate relative position
-        dx = (target[0]) - self.plane.x
-        dy = (target[1]) - self.plane.y
-        distance = math.hypot(dx, dy)
-
-        # Angle to the target (in degrees)
-        angle_to_target = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
-        angle_diff = (angle_to_target - self.plane.angle + 360) % 360
-        if angle_diff > 180:
-            angle_diff -= 360  # Convert to range -180 to 180
-
-        # Speed difference
-        speed_diff = self.plane.speed - 0
-
-        # Turning decision
-        if angle_diff > 10:
-            leftRite = 1  # turn right
-        elif angle_diff < -10:
-            leftRite = 2  # turn left
-        else:
-            leftRite = 0  # aligned enough
-
-        # Forward/back decision
-        if distance > 250 and speed_diff < 0:
-            frontBack = 1  # go faster to catch up
-        elif distance < 150 and speed_diff > 0:
-            frontBack = 2  # slow down
-        else:
-            frontBack = 0  # maintain speed
-
-        # Fire if roughly aligned and within shooting range
-        if abs(angle_diff) < 5 and distance < 300:
-            spaceShif = 1
-        else:
-            spaceShif = 0
-
-        # num_k can be used to indicate level of confidence, or tactic mode
-        num_k = 1 if spaceShif == 1 else 0
-
-        return frontBack, leftRite, spaceShif, num_k
-
-    def attack(self, target):
-        
-        amount = self.target.speed * self.rand1
-        direction = self.target.angle
-        rad = math.radians(direction)
-        delta_x = -amount * math.sin(rad)
-        delta_y = -amount * math.cos(rad)
-
-        # Calculate relative position
-        dx = (target.x+delta_x) - self.plane.x
-        dy = (target.y+delta_y) - self.plane.y
-        distance = math.hypot(dx, dy)
-
-        # Angle to the target (in degrees)
-        angle_to_target = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
-        angle_diff = (angle_to_target - self.plane.angle + 360) % 360
-        if angle_diff > 180:
-            angle_diff -= 360  # Convert to range -180 to 180
-
-        # Speed difference
-        speed_diff = self.plane.speed - target.speed
-
-        # Turning decision
-        if angle_diff > 10:
-            leftRite = 1  # turn right
-        elif angle_diff < -10:
-            leftRite = 2  # turn left
-        else:
-            leftRite = 0  # aligned enough
-
-        # Forward/back decision
-        if distance > 250 and speed_diff < 0:
-            frontBack = 1  # go faster to catch up
-        elif distance < 150 and speed_diff > 0:
-            frontBack = 2  # slow down
-        else:
-            frontBack = 0  # maintain speed
-
-        # Fire if roughly aligned and within shooting range
-        if abs(angle_diff) < 5 and distance < 300:
-            spaceShif = 1
-        else:
-            spaceShif = 0
-
-        # num_k can be used to indicate level of confidence, or tactic mode
-        num_k = 1 if spaceShif == 1 else 0
-
-        return frontBack, leftRite, spaceShif, num_k
-
-    def run(self, target_plane):
-        leftRite = 0
-
-        amount = self.target.speed * self.rand2
-        direction = self.target.angle
-        rad = math.radians(direction)
-        delta_x = -amount * math.sin(rad)
-        delta_y = -amount * math.cos(rad)
-
-        angle = self.plane.angle % 360
-        dx = (target_plane.x+delta_x) - self.plane.x
-        dy = (target_plane.y+delta_y) - self.plane.y
-        distance = math.hypot(dx, dy)
-        angle = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
-
-        angle_to_target = (math.degrees(math.atan2(-dx, -dy)) + 360) % 360
-        angle_diff = (angle_to_target - self.plane.angle + 360) % 360
-        if angle_diff > 180:
-            angle_diff -= 360 
-
-        # Turning decision
-        if angle_diff > 10:
-            leftRite = 2  
-        elif angle_diff < -10:
-            leftRite = 1  
-        else:
-            leftRite = 0 
-
-        return leftRite
-      
-    def choose_op(self):
-        choice = 0
-        frontBack, leftRite, spaceShif, num_k = 0,0,0,0
-        if loops % 2 == 0:
-            self.confidance = self.whay_ops()
-        if loops % 8 == 4:
-            self.update_player_dist()
-            self.target = self.find_target(self.all_planes,800)
-        xp_conf = self.whay_xp()
-        if self.target != None:
-
-            if self.confidance >= 0.6 and xp_conf <= self.confidance:
-                print(f"{self.plane.PT} is atacking PT>{self.target.PT}")
-                frontBack, leftRite, spaceShif, num_k = self.attack(self.target)
-                self.plane.ai_event(loops,frontBack, leftRite, spaceShif, 0)
-            elif xp_conf >= 0.6:
-                print("colecting xp")
-                self.plane.ai_event(loops,frontBack, leftRite, spaceShif, 0)
-            else:
-                print("runing")
-                leftRite = self.run(self.target)
-                frontBack = 1
-                self.plane.ai_event(loops,frontBack, leftRite, spaceShif, 0)
-        else:
-            if xp_conf >= 0.5:
-                print("gathering xp")
-                frontBack, leftRite, spaceShif, num_k = self.find_xp()
-                self.plane.ai_event(loops,frontBack, leftRite, spaceShif, 0)
-            else:
-                print("wandering")
-                self.plane.ai_event(loops,frontBack, leftRite, spaceShif, 0)
-
 class Wepons():
     def __init__(self,WT,x,y,direction,user_name,NW_OW="server"):
         self.NW_OW = NW_OW
@@ -628,13 +766,7 @@ class Wepons():
         self.y += delta_y
         self.dx = delta_x
         self.dy = delta_y
-        if not using_texture_map:
-            if (self.WT == "xp" or self.WT == "death_xp"):
-                self.Roriginal_image = comon_textures[self.WT]
-            else:
-                self.Roriginal_image = load_image(f"wepons/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
-        else:
-            self.Roriginal_image = load_image(f"wepons/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        self.Roriginal_image = load_image(f"wepons/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.Roriginal_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.Roriginal_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.rotate(self.original_image, direction)
@@ -751,18 +883,13 @@ class Plane():
         self.wepon_amounts = data['wepon_amounts']
         self.xp_value = data['xp_value']
         self.curent_leval = data['leval']
+        self.value = data['plane_value']
         self.turbulance = 0
         self.curent_pow = []
         self.pow_duration = 0
         self.curent_pow_duration = 0
         self.C_amo = self.wepon_amounts[0]
-        if not using_texture_map:
-            if (False):
-                self.original_image = comon_textures[self.PT]
-            else:
-                self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
-        else:
-            self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.Rect = self.image.get_rect(center=(center_x, center_y))
@@ -801,13 +928,7 @@ class Plane():
         self.curent_leval = data['leval']
         if self.wepon_amounts != []:
             self.C_amo = self.wepon_amounts[0]
-        if not using_texture_map:
-            if (False):
-                self.original_image = comon_textures[self.PT]
-            else:
-                self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
-        else:
-            self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.Rect = self.image.get_rect(center=(center_x, center_y))
@@ -1262,8 +1383,10 @@ def event():
 
             if event.key == pygame.K_v:
                 vol += 0.1
+                pygame.mixer_music.set_volume(vol + 0.5)
             elif event.key == pygame.K_b:
                 vol -= 0.1
+                pygame.mixer_music.set_volume(vol + 0.5)
 
         if event.type == pygame.MOUSEBUTTONDOWN:
           if R_menue_G != None and respawn_lev != None:
@@ -1506,7 +1629,10 @@ def settings_menue():
                     data = json.load(file)
                 # Toggle the JSON value
                 data['using_texture_pack'] = not data.get('using_texture_pack', False)
-                load_texture_map(settings_data["pack_name"])
+                if using_texture_map:
+                    load_texture_map(settings_data["pack_name"])
+                else:
+                    load_texture_map(settings_data['defalt_pack_name'])
                 with open("data/settings.json", "w") as file:
                     json.dump(data, file, indent=4)
                 settings_data = data
@@ -1662,8 +1788,6 @@ def update_B(all_B):
         else:
             bullet.life_time -= 3
 
-
-all_threads = []
 def manage_ais():
     global all_ais,all_bullets,all_planes,loops,all_xp,settings_data,simulation_dist,player1
     if len(all_ais) <= settings_data['max_ais']:
@@ -1687,8 +1811,6 @@ def manage_ais():
         #for thread in all_threads:
          #   thread.join()
           #  all_threads.remove(thread)
-
-
 
 
 def manage_xp():
@@ -1749,7 +1871,10 @@ def rand_cords(obj):
     rand_y = random.randint(int(max(0, obj.y - simulation_dist)),int(min(WORLD_HIGHT, obj.y + simulation_dist)))
     return rand_x,rand_y
  
-
+if using_texture_map:
+    load_texture_map(settings_data["pack_name"])
+else:
+    load_texture_map(settings_data['defalt_pack_name'])
 planeT = random.choice(level1)
 player1 = None
 Menue = 0
@@ -1798,6 +1923,6 @@ while runing:
     s_display = pygame.transform.smoothscale(display, new_size)
     window.blit(s_display,W_pos)
     print(f"loops are at {loops}")
-    print(f"{prin_GREEN} the fps is {clock.get_fps()}{prin_RESET}")
+    #print(f"{prin_GREEN} the fps is {clock.get_fps()}{prin_RESET}")
     pygame.display.flip()
     clock.tick(20.5)

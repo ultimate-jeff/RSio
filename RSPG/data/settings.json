@@ -1,7 +1,8 @@
 {
     "test": 0,
-    "using_texture_pack": true,
+    "using_texture_pack": false,
     "pack_name": "holoween_pack",
+    "defalt_pack_name": "1_defalt",
     "dev_ops": 1,
     "ticks_ai_can_be_unloaded": 15,
     "death_songs": [
