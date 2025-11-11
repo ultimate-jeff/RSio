@@ -19,5 +19,7 @@
   "death_xp": [ "death_xp" ],
   "death_xp_amount": 3,
   "death_xp_speed": 5,
-  "death_xp_accselaration": 0.5
+  "death_xp_accselaration": 0.5,
+  "pow_gives": [],
+  "impact_damage_rate": 0.1
 }

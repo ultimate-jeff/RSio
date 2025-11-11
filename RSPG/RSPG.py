@@ -1,6 +1,4 @@
 
-from functools import partial
-import json.decoder
 import sys
 import math
 import pygame
@@ -9,6 +7,7 @@ import time
 import json
 import numpy as np
 import os
+from pygame import key
 import pyperclip
 import copy
 
@@ -17,11 +16,7 @@ prin_RED = '\033[91m'
 prin_GREEN = '\033[92m'
 prin_BLUE = '\033[94m'
 prin_RESET = '\033[0m'  # Resets to default color and style
-"""
-print(f"{prin_RED}This text is red.{prin_RESET}")
-print(f"{prin_GREEN}This text is green.{prin_RESET}")
-print(f"{prin_BLUE}This text is blue.{prin_RESET} And this is normal again.")
-"""
+
 texture_map = {}
 file_map = {}
 with open("planes/levels.json","r") as file:
@@ -38,8 +33,8 @@ with open("data/powers.json","r") as file:
     powers_data = json.load(file)
 with open("planes/levels.json","r") as file1:
     lev_data = json.load(file1)
-with open("data/pre_loded_textures.json","r") as file:
-    texture_map = json.load(file)
+#with open("data/pre_loded_textures.json","r") as file:
+#    texture_map = json.load(file)
 with open("data/ai_names.json","r") as file:
     plane_names = json.load(file)
 
@@ -111,70 +106,82 @@ def color_swap(surface: pygame.Surface, old_color: tuple, new_color: tuple) -> p
     pygame.surfarray.pixels_alpha(new_surface)[:] = arr_alpha
     return new_surface
 
-def init_comon_textures(texture_map):
-    all_keys = texture_map.keys()
-    TM = texture_map
-    for key in all_keys:
-        val = TM[key]
-        if isinstance(val,bool):
-            val = pygame.image.load(key).convert_alpha()
-            TM[key] = val
-        elif isinstance(val,str):
-            val = pygame.image.load(val).convert_alpha()
-            TM[key] = val
-        else:
-            val = pygame.image.load(key).convert_alpha()
-            TM[key] = val
-    texture_map = TM
-    return texture_map
+class Loader:
+    def __init__(self,TM,FM):
+        self.texture_map = TM
+        self.file_map = FM
 
-def load_image(path,using_TP=False,TP_data=None):
-    return texture_map[path]
+    def init_comon_textures(self,texture_map):
+        all_keys = texture_map.keys()
+        TM = texture_map
+        for key in all_keys:
+            val = TM[key]
+            if isinstance(val,bool):
+                val = pygame.image.load(key).convert_alpha()
+                TM[key] = val
+            elif isinstance(val,str):
+                val = pygame.image.load(val).convert_alpha()
+                TM[key] = val
+            else:
+                val = pygame.image.load(key).convert_alpha()
+                TM[key] = val
+        self.texture_map = TM
+        return TM
 
-def init_game_files(file_map):
-    all_keys = file_map.keys()
-    TM = file_map
-    for key in all_keys:
-        val = TM[key]
-        if isinstance(val,bool):
-            with open(key,"r") as file:
-                val = json.load(file)
-            TM[key] = val
-        elif isinstance(val,str):
-            with open(key,"r") as file:
-                val = json.load(file)
-            TM[key] = val
-        else:
-            with open(key,"r") as file:
-                val = json.load(file)
-            TM[key] = val
-    file_map = TM
-    return file_map
+    def image(self,path,using_TP=False,TP_data=None):
+        try:
+            return self.texture_map[path]
+        except KeyError:
+            print(f"{prin_RED} error loading {path} {prin_RESET}")
+            return pygame.image.load(path).convert_alpha()
 
-def load_texture_map(map_name):
-    global texture_map
-    with open(f"data/texture_maps/{map_name}.json","r") as file:
-        texture_map = json.load(file)
-    texture_map = init_comon_textures(texture_map)
+    def init_game_files(self,file_map):
+        all_keys = file_map.keys()
+        TM = file_map
+        for key in all_keys:
+            val = TM[key]
+            if isinstance(val,bool):
+                with open(key,"r") as file:
+                    val = json.load(file)
+                TM[key] = val
+            elif isinstance(val,str):
+                with open(key,"r") as file:
+                    val = json.load(file)
+                TM[key] = val
+            else:
+                with open(key,"r") as file:
+                    val = json.load(file)
+                TM[key] = val
+        self.file_map = TM
+        return TM
 
-def load_file_map(map_name):
-    global file_map
-    with open(f"data/GFmaps/{map_name}.json","r") as file:
-        file_map = json.load(file)
-    file_map = init_game_files(file_map)
+    def load_texture_map(self,map_name):
+        with open(f"data/texture_maps/{map_name}.json","r") as file:
+            self.texture_map = json.load(file)
+        self.texture_map = self.init_comon_textures(self.texture_map)
 
-def load_file(file_path):
-    return file_map[file_path]
+    def load_file_map(self,map_name):
+        global file_map
+        with open(f"data/GFmaps/{map_name}.json","r") as file:
+            self.file_map = json.load(file)
+        self.file_map = self.init_game_files(self.file_map)
 
-def loading_scren1():
-    display.fill((49, 104, 158))
-    loading_img = pygame.image.load("images/loading_screen1.png").convert_alpha()
-    loading_img = pygame.transform.smoothscale(loading_img, (1000, 750))
-    display.blit(loading_img, (250, 0))
-    s_display = pygame.transform.smoothscale(display, new_size)
-    window.blit(s_display,W_pos)
-    pygame.display.flip()
+    def data(self,file_path):
+        try:
+            return self.file_map[file_path]
+        except KeyError:
+            print(f"{prin_RED} error loading {file_path} {prin_RESET}")
+            with open(file_path,"r") as file:
+                return json.load(file)
 
+    def loading_scren1(self):
+        display.fill((49, 104, 158))
+        loading_img = pygame.image.load("images/loading_screen1.png").convert_alpha()
+        loading_img = pygame.transform.smoothscale(loading_img, (1000, 750))
+        display.blit(loading_img, (250, 0))
+        s_display = pygame.transform.smoothscale(display, new_size)
+        window.blit(s_display,W_pos)
+        pygame.display.flip()
 
 class Chunk:
     def __init__(self, cx, cy, chunk_size):
@@ -182,7 +189,6 @@ class Chunk:
         self.cy = cy
         self.size = chunk_size
         self.surf = pygame.Surface((chunk_size, chunk_size), flags=pygame.SRCALPHA)
-        #self.surf.fill((40 + (cx*5) % 200, 80 + (cy*5) % 150, 40, 255))
         self.surf.blit(img, (0,0))
         self._scaled = None
         self._last_zoom = None
@@ -243,7 +249,8 @@ class GameCamera:
                 screen_y = cy * CHUNK_SIZE * z + self.offset_y
                 self.display_surface.blit(surf, (screen_x, screen_y))
 
-load_file_map("Main")
+loader = Loader(texture_map,file_map)
+loader.load_file_map("Main")
 loops = 0
 using_texture_map = settings_data['using_texture_pack']
 window = pygame.display.set_mode((1500,750))
@@ -265,23 +272,20 @@ center_x = display.get_width() / 2
 center_y = display.get_height() / 2
 camra = GameCamera(display,CHUNK_SIZE)
 clock = pygame.Clock()
-loading_scren1()
-
-#comon textures
-comon_textures = {}
-CT_img = pygame.image.load("wepons/bullet.png").convert_alpha()
-comon_textures["bullet"] = CT_img
-comon_textures["fast_bullet"] = CT_img
-CT_img = pygame.image.load("Paricals/xp.png").convert_alpha()
-comon_textures["xp"] = CT_img
-CT_img = pygame.image.load("Paricals/death_xp.png").convert_alpha()
-comon_textures["death_xp"] = CT_img
+loader.loading_scren1()
 
 #C:\Users\matth\OneDrive\Desktop\333369.png
 #texture_map1.json
 dangerous_particals = ["mine1"]
 text_font = pygame.font.SysFont("Arial", 20)
 text_font_big = pygame.font.SysFont("Arial", 50)
+
+def get_angle_and_dist(x1,y1,x,y):
+        dx = x1 - x
+        dy = y1 - y
+        dist = math.hypot(dx, dy)
+        angle = (math.degrees(math.atan2(dy, dx)) + 180) % 360
+        return angle,dist
 
 def disp_text(text, font, color, x, y):
     img = font.render(text, True, color)
@@ -302,25 +306,6 @@ for button in menue_buttone_data:
     bimg = pygame.transform.scale(bimg, (button['sizex'], button['sizey']))
     button['image'] = bimg
 
-class PacketBuilder:
-    @staticmethod
-    def build(tick, planes, bullets, particles, ais):
-        return {
-            "T": "tick",
-            "tick": tick % 32767,
-            "P": [p.to_dict() for p in planes],
-            "B": [b.to_dict() for b in bullets],
-            "p": [px.to_dict() for px in particles],
-            "AI": [ai.to_dict() for ai in ais]
-        }
-
-    @staticmethod
-    def to_json(packet_dict):
-        return json.dumps(packet_dict)
-
-    @staticmethod
-    def from_json(packet_str):
-        return json.loads(packet_str)
 
 class AI_POINT:
     def __init__(self,x,y,value,og_bin):
@@ -714,7 +699,7 @@ class Parical():
         rad = math.radians(direction)
         self.dx = -self.speed * math.sin(rad)
         self.dy = -self.speed * math.cos(rad)
-        data = load_file(f"Paricals/stats/{WT}.json")
+        data = loader.data(f"Paricals/stats/{WT}.json")
         self.data = data
         self.give_pows = data['give_pows']
         self.amount = data['amount']
@@ -726,7 +711,7 @@ class Parical():
         if SX != None and SY != None:
             self.sizex = SX
             self.sizey = SY
-        self.original_image = load_image(f"Paricals/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        self.original_image = loader.image(f"Paricals/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.rect = self.image.get_rect(center=(500, 350))
@@ -773,7 +758,7 @@ class Parical():
         self.sizex = data['sizex']
         self.sizey = data['sizey']
         self.life_time = data['life_time']
-        self.original_image = pygame.image.load(f"images/{self.WT}.png")
+        self.original_image = loader.image(f"images/{self.WT}.png")
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.rect = self.image.get_rect(center=(500, 350))
@@ -805,7 +790,7 @@ class Wepons():
         self.x = x
         self.y = y
         self.angle = direction
-        data = load_file(f"wepons/wepon_stats/{WT}.json")
+        data = loader.data(f"wepons/wepon_stats/{WT}.json")
         self.data = data
         self.speed = data['speed']
         self.damage = data['damage']
@@ -823,7 +808,7 @@ class Wepons():
         self.y += delta_y
         self.dx = delta_x
         self.dy = delta_y
-        self.Roriginal_image = load_image(f"wepons/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        self.Roriginal_image = loader.image(f"wepons/{WT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.Roriginal_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.Roriginal_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.rotate(self.original_image, direction)
@@ -916,7 +901,7 @@ class Plane():
         self.y = random.randint(100,WORLD_HIGHT-100)
         self.PT = PT
         try:
-            data = load_file(f"planes/stats/{PT}.json")
+            data = loader.data(f"planes/stats/{PT}.json")
         except Exception:
             print(f"could not load planes/stats/{PT}.json")
             sys.exit()
@@ -945,7 +930,7 @@ class Plane():
         self.pow_duration = 0
         self.curent_pow_duration = 0
         self.C_amo = self.wepon_amounts[0]
-        self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        self.original_image = loader.image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.Rect = self.image.get_rect(center=(center_x, center_y))
@@ -953,13 +938,14 @@ class Plane():
         self.num = 0
         self.xp = 0
         self.fired = 0
+        self.coliding_planes = 0
         self.death_cause = ["None",""]
         self.hitbox = pygame.rect.Rect(self.x,self.y,self.HB_sizex,self.HB_sizey)
 
     def respawn(self,PT,op_data=None):
         self.PT = PT
         if op_data == None:
-            data = load_file(f"planes/stats/{PT}.json")
+            data = loader.data(f"planes/stats/{PT}.json")
         else:
             data = op_data
         self.acceleration = data['acceleration']
@@ -983,11 +969,12 @@ class Plane():
         self.curent_leval = data['leval']
         if self.wepon_amounts != []:
             self.C_amo = self.wepon_amounts[0]
-        self.original_image = load_image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
+        self.original_image = loader.image(f"planes/{PT}.png",using_TP=using_texture_map,TP_data=texture_map)
         self.image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.original_image = pygame.transform.scale(self.original_image,(self.sizex,self.sizey))
         self.Rect = self.image.get_rect(center=(center_x, center_y))
         self.data = data
+        self.coliding_planes = 0
         self.death_cause = ["None",""]
         self.hitbox = pygame.rect.Rect(self.x,self.y,self.HB_sizex,self.HB_sizey)
 
@@ -1150,6 +1137,34 @@ class Plane():
                     pow_obj = powers_data['pows'][Pow]
                     self.curent_pow.append(pow_obj)
                     self.add_pows(pow_obj)
+                    
+
+    def collide_plane(self):
+        global all_planes
+        self.coliding_planes = 0
+        for plane in all_planes:
+            if plane != self:
+                #ang,dist = get_angle_and_dist(plane.x,plane.y,self.x,self.y)
+                #total_d = (self.HB_sizex/2) + (plane.HB_sizex/2)
+                if self.hitbox.colliderect(plane.hitbox):
+                    self.coliding_planes += 1
+                    self.apply_collide1(plane)
+
+    def apply_collide1(self, plane):
+        ang, dist = get_angle_and_dist(self.x, self.y, plane.x, plane.y)
+        amount = self.speed/1.1
+        rad = math.radians(ang)
+        by = amount * math.cos(rad)
+        bx = amount * math.sin(rad)
+        self.x += -bx
+        self.y += -by
+        if self.speed > 0:
+            self.speed -= self.acceleration*1.1
+
+        self.health -= self.data["impact_damage_rate"]/self.armor
+        if plane.data["pow_gives"] != []:
+            for p in plane.data["pow_gives"]:
+                self.add_pows(powers_data["pows"][p])
                         
     def display_death_msg(self):
         global death_msgs,display
@@ -1161,7 +1176,7 @@ class Plane():
         disp_text(msg, text_font_big, (255, 0, 0), center_x, center_y-100)
 
     def tick_ops(self):
-        pass
+        self.collide_plane()
 
     def fourth_tick_ops(self):
         if self.speed < self.min_speed:
@@ -1514,7 +1529,7 @@ def main_menue():
     pygame.draw.rect(display,(100,100,100,100),(center_x-200,center_y-50,400,50),border_radius=20)
     pygame.draw.rect(display,(50,50,50,0),(center_x-200,center_y-50,400,50),width= 4,border_radius=15)
     disp_text(DT,pygame.font.SysFont("Arial", 25),(80,80,80),center_x,center_y-25)
-    img = load_image("pt-17.png")
+    img = loader.image("pt-17.png")
     img = pygame.transform.scale(img,(40,40))
     img = pygame.transform.rotate(img, -45)
     display.blit(img,(center_x-220,center_y-80))
@@ -1685,9 +1700,9 @@ def settings_menue():
                 # Toggle the JSON value
                 data['using_texture_pack'] = not data.get('using_texture_pack', False)
                 if using_texture_map:
-                    load_texture_map(settings_data["pack_name"])
+                    loader.load_texture_map(settings_data["pack_name"])
                 else:
-                    load_texture_map(settings_data['defalt_pack_name'])
+                    loader.load_texture_map(settings_data['defalt_pack_name'])
                 with open("data/settings.json", "w") as file:
                     json.dump(data, file, indent=4)
                 settings_data = data
@@ -1758,7 +1773,7 @@ def wepons_menue():
     pygame.draw.rect(display,(100,100,100),(center_x-(box_width/2),display.get_height()-85,box_width,80),border_radius=10)
     pygame.draw.rect(display,(50,50,50),(center_x-(box_width/2),display.get_height()-85,box_width,80),width= 4,border_radius=10)
     for ind,wep in enumerate(wep_list):
-        img = pygame.image.load(f"wepons/{wep}.png").convert_alpha()
+        img = loader.image(f"wepons/{wep}.png").convert_alpha()
         img = pygame.transform.scale(img, (60, 60))
         x_pos = center_x - (box_width/2) + (ind * 80) + 10
         y_pos = display.get_height() - 75
@@ -1844,7 +1859,7 @@ def update_B(all_B):
             bullet.life_time -= 3
 
 def manage_ais():
-    global all_ais,all_bullets,all_planes,loops,all_xp,settings_data,simulation_dist,player1
+    global all_ais,all_bullets,all_planes,all_xp,settings_data,simulation_dist,player1
     if len(all_ais) <= settings_data['max_ais']:
         ai = AI(all_planes,all_bullets,all_xp)
         ai.plane.x,ai.plane.y = rand_cords(player1)
@@ -1853,9 +1868,6 @@ def manage_ais():
     if all_ais != []:
         for ai in all_ais:
             if ai.player_dist <= simulation_dist:
-                #thread = Thread(update_ai(ai),args=ai)
-                #thread.start()
-                #all_threads.append(thread)
                 update_ai(ai)
             else:
                 ai.un_loaded_ticks += 1
@@ -1863,16 +1875,12 @@ def manage_ais():
                     del ai.plane
                     all_ais.remove(ai)
                     del ai
-        #for thread in all_threads:
-         #   thread.join()
-          #  all_threads.remove(thread)
-
 
 def manage_xp():
     global all_xp,settings_data,player1,simulation_dist
     if len(all_xp) <= len(all_planes)*settings_data["xpp"]:
         rx,ry = rand_cords(player1)
-        Xp = Parical(random.choice(("xp","air_mine1","xp","xp")),rx,ry,direction=random.randint(0,360),speed=6)
+        Xp = Parical(random.choice(("xp","xp","xp")),rx,ry,direction=random.randint(0,360),speed=6)
         Xp.update(display,camra)
         all_xp.append(Xp)
     is_mogo_four = loops % 4 == 1
@@ -1900,9 +1908,9 @@ def rand_cords(obj):
     return rand_x,rand_y
  
 if using_texture_map:
-    load_texture_map(settings_data["pack_name"])
+    loader.load_texture_map(settings_data["pack_name"])
 else:
-    load_texture_map(settings_data['defalt_pack_name'])
+    loader.load_texture_map(settings_data['defalt_pack_name'])
 planeT = random.choice(level1)
 player1 = None
 Menue = 0
