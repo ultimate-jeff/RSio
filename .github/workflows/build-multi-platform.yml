@@ -1,0 +1,60 @@
+name: Build and Release (ELF, EXE, APP)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            ext: ""
+            output: RSPG/RSPG       # Linux ELF
+          - os: windows-latest
+            ext: ".exe"
+            output: RSPG/RSPG.exe   # Windows EXE
+          - os: macos-latest
+            ext: ".app"
+            output: RSPG/RSPG.app   # macOS APP
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Compile Python app
+        run: |
+          pyinstaller --onefile --noconfirm RSPG/RSPG.py
+
+      - name: Move output to RSPG folder
+        run: |
+          mkdir -p RSPG
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            move dist\\RSPG.exe RSPG\\RSPG.exe
+          elif [ "${{ runner.os }}" == "macOS" ]; then
+            mv dist/RSPG.app RSPG/RSPG.app
+          else
+            mv dist/RSPG RSPG/RSPG
+          fi
+        shell: bash
+
+      - name: Upload compiled artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RSPG-${{ runner.os }}-binary
+          path: ${{ matrix.output }}
