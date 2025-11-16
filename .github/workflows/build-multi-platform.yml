@@ -1,4 +1,4 @@
-name: Build and Release (ELF, EXE, APP)
+name: Build ELF, EXE, and APP (Sequential)
 
 on:
   push:
@@ -7,21 +7,12 @@ on:
       - master
 
 jobs:
-  build:
-    name: Build for ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            ext: ""
-            output: RSPG/RSPG       # Linux ELF
-          - os: windows-latest
-            ext: ".exe"
-            output: RSPG/RSPG.exe   # Windows EXE
-          - os: macos-latest
-            ext: ".app"
-            output: RSPG/RSPG.app   # macOS APP
+
+  # -----------------------
+  # 1. Linux (ELF)
+  # -----------------------
+  build_linux:
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -34,27 +25,83 @@ jobs:
 
       - name: Install PyInstaller
         run: |
-          python -m pip install --upgrade pip
+          pip install --upgrade pip
           pip install pyinstaller
 
-      - name: Compile Python app
+      - name: Build Linux ELF
         run: |
           pyinstaller --onefile --noconfirm RSPG/RSPG.py
-
-      - name: Move output to RSPG folder
-        run: |
           mkdir -p RSPG
-          if [ "${{ runner.os }}" == "Windows" ]; then
-            move dist\\RSPG.exe RSPG\\RSPG.exe
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            mv dist/RSPG.app RSPG/RSPG.app
-          else
-            mv dist/RSPG RSPG/RSPG
-          fi
-        shell: bash
+          mv dist/RSPG RSPG/RSPG
 
-      - name: Upload compiled artifact
+      - name: Upload Linux Binary
         uses: actions/upload-artifact@v4
         with:
-          name: RSPG-${{ runner.os }}-binary
-          path: ${{ matrix.output }}
+          name: RSPG-Linux
+          path: RSPG/RSPG
+
+  # -----------------------
+  # 2. Windows (.exe)
+  # -----------------------
+  build_windows:
+    runs-on: windows-latest
+    needs: build_linux   # <-- waits for Linux to finish FIRST
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PyInstaller
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build Windows .exe
+        run: |
+          pyinstaller --onefile --noconfirm RSPG/RSPG.py
+          mkdir RSPG
+          move dist\RSPG.exe RSPG\RSPG.exe
+
+      - name: Upload Windows Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: RSPG-Windows
+          path: RSPG/RSPG.exe
+
+  # -----------------------
+  # 3. macOS (.app)
+  # -----------------------
+  build_macos:
+    runs-on: macos-latest
+    needs: build_windows   # <-- waits for Windows second
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PyInstaller
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Build macOS .app
+        run: |
+          pyinstaller --onefile --noconfirm RSPG/RSPG.py
+          mkdir -p RSPG
+          mv dist/RSPG.app RSPG/RSPG.app
+
+      - name: Upload macOS Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: RSPG-macOS
+          path: RSPG/RSPG.app
