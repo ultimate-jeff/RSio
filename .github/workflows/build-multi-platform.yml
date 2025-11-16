@@ -1,4 +1,4 @@
-name: Build ELF, EXE, and APP (Sequential)
+name: Build ELF, EXE, and APP (Sequential & Safe)
 
 on:
   push:
@@ -32,7 +32,7 @@ jobs:
         run: |
           pyinstaller --onefile --noconfirm RSPG/RSPG.py
           mkdir -p RSPG
-          mv dist/RSPG RSPG/RSPG
+          mv -f dist/RSPG RSPG/RSPG
 
       - name: Upload Linux Binary
         uses: actions/upload-artifact@v4
@@ -45,7 +45,7 @@ jobs:
   # -----------------------
   build_windows:
     runs-on: windows-latest
-    needs: build_linux   # <-- waits for Linux to finish FIRST
+    needs: build_linux   # waits for Linux first
 
     steps:
       - name: Checkout code
@@ -62,10 +62,11 @@ jobs:
           pip install pyinstaller
 
       - name: Build Windows .exe
+        shell: pwsh
         run: |
           pyinstaller --onefile --noconfirm RSPG/RSPG.py
-          mkdir RSPG
-          move dist\RSPG.exe RSPG\RSPG.exe
+          if (-Not (Test-Path -Path "RSPG")) { New-Item -ItemType Directory -Path RSPG }
+          Move-Item -Path dist\RSPG.exe -Destination RSPG\RSPG.exe -Force
 
       - name: Upload Windows Binary
         uses: actions/upload-artifact@v4
@@ -78,7 +79,7 @@ jobs:
   # -----------------------
   build_macos:
     runs-on: macos-latest
-    needs: build_windows   # <-- waits for Windows second
+    needs: build_windows   # waits for Windows second
 
     steps:
       - name: Checkout code
@@ -98,7 +99,7 @@ jobs:
         run: |
           pyinstaller --onefile --noconfirm RSPG/RSPG.py
           mkdir -p RSPG
-          mv dist/RSPG.app RSPG/RSPG.app
+          mv -f dist/RSPG.app RSPG/RSPG.app
 
       - name: Upload macOS Binary
         uses: actions/upload-artifact@v4
