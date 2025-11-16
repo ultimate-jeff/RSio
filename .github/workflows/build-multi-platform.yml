@@ -1,4 +1,4 @@
-name: Build ELF, EXE, and APP (Sequential & Safe)
+name: Build ELF, EXE, and macOS Executable (Sequential & Safe)
 
 on:
   push:
@@ -45,7 +45,7 @@ jobs:
   # -----------------------
   build_windows:
     runs-on: windows-latest
-    needs: build_linux   # waits for Linux first
+    needs: build_linux   # wait for Linux first
 
     steps:
       - name: Checkout code
@@ -75,11 +75,11 @@ jobs:
           path: RSPG/RSPG.exe
 
   # -----------------------
-  # 3. macOS (.app)
+  # 3. macOS (single executable)
   # -----------------------
   build_macos:
     runs-on: macos-latest
-    needs: build_windows   # waits for Windows second
+    needs: build_windows   # wait for Windows second
 
     steps:
       - name: Checkout code
@@ -95,14 +95,14 @@ jobs:
           pip install --upgrade pip
           pip install pyinstaller
 
-      - name: Build macOS .app
+      - name: Build macOS executable
         run: |
           pyinstaller --onefile --noconfirm RSPG/RSPG.py
           mkdir -p RSPG
-          mv -f dist/RSPG.app RSPG/RSPG.app
+          mv -f dist/RSPG RSPG/RSPG
 
       - name: Upload macOS Binary
         uses: actions/upload-artifact@v4
         with:
           name: RSPG-macOS
-          path: RSPG/RSPG.app
+          path: RSPG/RSPG
